@@ -1,12 +1,18 @@
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy import select, or_, lt
+from sqlalchemy import select, or_
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+# Ensure backend directory is in sys.path
+backend_dir = Path(__file__).resolve().parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 from app.database import AsyncSessionLocal
 from app.models import PrintJob, PrintJobStatus
@@ -24,7 +30,7 @@ async def cleanup_expired_jobs():
         async with AsyncSessionLocal() as db:
             stmt = select(PrintJob).where(
                 or_(
-                    lt(PrintJob.expires_at, now),
+                    PrintJob.expires_at < now,
                     PrintJob.status == PrintJobStatus.printed,
                 )
             )
@@ -40,12 +46,22 @@ async def cleanup_expired_jobs():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start background cleanup task
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(cleanup_expired_jobs, "interval", minutes=30)
-    scheduler.start()
+    # Start background cleanup task if running in continuous server mode
+    scheduler = None
+    try:
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(cleanup_expired_jobs, "interval", minutes=30)
+        scheduler.start()
+    except Exception as e:
+        print(f"[Lifespan Scheduler Note] {e}")
+
     yield
-    scheduler.shutdown()
+
+    if scheduler and scheduler.running:
+        try:
+            scheduler.shutdown(wait=False)
+        except Exception:
+            pass
 
 
 app = FastAPI(

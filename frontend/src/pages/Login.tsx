@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Printer, Lock, EnvelopeSimple, Spinner, WarningCircle } from '@phosphor-icons/react';
 import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -199,6 +200,26 @@ export const Login: React.FC = () => {
             {loading ? <Spinner size={20} className="animate-spin" /> : 'Log In'}
           </button>
         </form>
+
+        {/* Divider */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            margin: '20px 0',
+            color: 'var(--text-muted)',
+            fontSize: '12px',
+          }}
+        >
+          <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+          <span style={{ padding: '0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            or continue with
+          </span>
+          <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+        </div>
+
+        {/* Google Sign-In */}
+        <GoogleSignInButton onError={(msg) => setError(msg)} text="signin_with" />
 
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '13px', color: 'var(--text-muted)' }}>
           Don't have an account?{' '}

@@ -1,8 +1,8 @@
 {
-  "crons": [
+  "rewrites": [
     {
-      "path": "/api/cron/cleanup",
-      "schedule": "0 * * * *"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

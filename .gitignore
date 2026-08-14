@@ -65,3 +65,5 @@ yarn-error.log*
 # Vercel & TypeScript
 .vercel/
 *.tsbuildinfo
+.vercel
+.env*

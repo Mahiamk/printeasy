@@ -4,9 +4,21 @@ import httpx
 from pathlib import Path
 from fastapi import UploadFile, HTTPException
 
+import tempfile
+
 BLOB_TOKEN = os.getenv("BLOB_READ_WRITE_TOKEN", "")
-LOCAL_UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
-LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Serverless (Vercel/Lambda) has a read-only filesystem; use /tmp for local uploads fallback
+if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+    LOCAL_UPLOADS_DIR = Path(tempfile.gettempdir()) / "printeasy_uploads"
+else:
+    LOCAL_UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
+
+try:
+    LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    LOCAL_UPLOADS_DIR = Path(tempfile.gettempdir()) / "printeasy_uploads"
+    LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 BLOB_API_URL = "https://blob.vercel-storage.com"
 

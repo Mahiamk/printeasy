@@ -9,6 +9,7 @@ import { PrintScreen } from './pages/PrintScreen';
 import { PrintingCodePage } from './pages/PrintingCodePage';
 import { Settings } from './pages/Settings';
 import { Spinner } from '@phosphor-icons/react';
+import { Analytics } from '@vercel/analytics/react';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -106,6 +107,7 @@ export const App: React.FC = () => {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <Analytics />
       </BrowserRouter>
     </AuthProvider>
   );

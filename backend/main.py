@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, lt
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database import AsyncSessionLocal

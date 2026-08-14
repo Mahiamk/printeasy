@@ -27,4 +27,18 @@ export const authApi = {
     const res = await api.get('/api/auth/me');
     return res.data;
   },
+
+  getGoogleConfig: async (): Promise<{ client_id: string | null }> => {
+    try {
+      const res = await api.get('/api/auth/google/config');
+      return res.data;
+    } catch {
+      return { client_id: null };
+    }
+  },
+
+  googleLogin: async (id_token: string): Promise<AuthResponse> => {
+    const res = await api.post('/api/auth/google', { id_token });
+    return res.data;
+  },
 };

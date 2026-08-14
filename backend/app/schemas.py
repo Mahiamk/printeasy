@@ -22,6 +22,14 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+
+class GoogleConfigResponse(BaseModel):
+    client_id: Optional[str] = None
+
+
 class UserOut(BaseModel):
     id: UUID
     email: str

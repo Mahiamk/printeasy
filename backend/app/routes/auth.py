@@ -175,4 +175,5 @@ async def get_me(current_user: AuthenticatedUser = Depends(get_current_user)):
         email=current_user.user.email,
         created_at=current_user.user.created_at,
         has_printing_code=bool(current_user.user.printing_code_encrypted),
+        is_superadmin=current_user.is_superadmin,
     )

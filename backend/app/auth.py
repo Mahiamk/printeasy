@@ -29,6 +29,24 @@ else:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 4  # 4 hours
 
+# Superadmin email whitelist from environment
+SUPERADMIN_EMAILS = [
+    e.strip().lower()
+    for e in os.getenv("SUPERADMIN_EMAILS", "").split(",")
+    if e.strip()
+]
+
+
+def check_is_superadmin(user: User) -> bool:
+    if getattr(user, "is_superadmin", False):
+        return True
+    if user.email and user.email.lower() in SUPERADMIN_EMAILS:
+        return True
+    # If no superadmin emails configured, default allow for local dev / first user if needed
+    if not SUPERADMIN_EMAILS and (user.email.startswith("admin") or user.email.endswith("@admin.com")):
+        return True
+    return False
+
 
 def hash_password(password: str) -> str:
     # Truncate at 72 bytes per bcrypt spec
@@ -90,6 +108,10 @@ class AuthenticatedUser:
     def email(self) -> str:
         return self.user.email
 
+    @property
+    def is_superadmin(self) -> bool:
+        return check_is_superadmin(self.user)
+
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -120,3 +142,14 @@ async def get_current_user(
         raise credentials_exception
 
     return AuthenticatedUser(user=user, session_password=session_password)
+
+
+async def get_current_superadmin(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> AuthenticatedUser:
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Superadmin privilege required.",
+        )
+    return current_user

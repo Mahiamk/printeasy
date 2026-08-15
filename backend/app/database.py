@@ -37,6 +37,8 @@ engine = create_async_engine(
         "ssl": ssl_context,
         "server_settings": {"application_name": "printeasy_api"},
         "command_timeout": 15,
+        "prepared_statement_cache_size": 0,  # Disable client-side statement cache
+        "statement_cache_size": 0,  # Disable asyncpg server-side statement cache (Neon pooler compat)
     },
     pool_size=2,
     max_overflow=3,

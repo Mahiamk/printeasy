@@ -21,6 +21,7 @@ from app.routes.auth import router as auth_router
 from app.routes.jobs import router as jobs_router
 from app.routes.code import router as code_router
 from app.routes.stats import router as stats_router
+from app.routes.superadmin import router as superadmin_router
 
 
 async def cleanup_expired_jobs():
@@ -46,6 +47,15 @@ async def cleanup_expired_jobs():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Ensure database schema additions
+    try:
+        from app.database import engine
+        from sqlalchemy import text
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_superadmin BOOLEAN DEFAULT FALSE;"))
+    except Exception as e:
+        print(f"[Schema Init Note] {e}")
+
     # Start background cleanup task if running in continuous server mode
     scheduler = None
     try:
@@ -94,6 +104,7 @@ app.include_router(auth_router)
 app.include_router(jobs_router)
 app.include_router(code_router)
 app.include_router(stats_router)
+app.include_router(superadmin_router)
 
 
 @app.get("/api/health")

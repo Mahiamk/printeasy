@@ -31,13 +31,21 @@ ssl_context = ssl.create_default_context()
 ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
 
-engine = create_async_engine(
-    clean_url,
-    connect_args={"ssl": ssl_context},
-    echo=False,
-    pool_pre_ping=True,
-)
-AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+    engine = create_async_engine(
+        clean_url,
+        connect_args={
+            "ssl": ssl_context,
+            "server_settings": {"application_name": "printeasy_api"},
+            "command_timeout": 15,
+        },
+        pool_size=2,
+        max_overflow=3,
+        pool_timeout=10,
+        pool_recycle=300,
+        pool_pre_ping=True,
+        echo=False,
+    )
+    AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):

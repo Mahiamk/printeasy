@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { useAuth } from '../context/AuthContext';
-import { statsApi, StatsResponse } from '../api/stats';
+import { useData } from '../context/DataContext';
 import {
   UserCircle,
   ShieldCheck,
@@ -15,11 +15,7 @@ import {
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
-  const [stats, setStats] = useState<StatsResponse | null>(null);
-
-  useEffect(() => {
-    statsApi.get().then(setStats).catch(console.error);
-  }, []);
+  const { stats } = useData();
 
   return (
     <AppLayout>

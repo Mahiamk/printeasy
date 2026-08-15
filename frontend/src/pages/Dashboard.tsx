@@ -7,47 +7,20 @@ import { QueueTable } from '../components/queue/QueueTable';
 import { PrintJob, jobsApi } from '../api/jobs';
 import { StatsResponse, statsApi } from '../api/stats';
 import { codeApi } from '../api/code';
+import { useData } from '../context/DataContext';
 import { Key, Gear, Copy, Check } from '@phosphor-icons/react';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [jobs, setJobs] = useState<PrintJob[]>([]);
-  const [stats, setStats] = useState<StatsResponse | null>(null);
-  const [printingCode, setPrintingCode] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
+  const { jobs, stats, printingCode, initialLoaded, addJob, removeJob } = useData();
   const [copied, setCopied] = useState<boolean>(false);
 
-  const loadData = async () => {
-    try {
-      const [jobsData, statsData, codeData] = await Promise.allSettled([
-        jobsApi.list(),
-        statsApi.get(),
-        codeApi.get(),
-      ]);
-
-      if (jobsData.status === 'fulfilled') setJobs(jobsData.value);
-      if (statsData.status === 'fulfilled') setStats(statsData.value);
-      if (codeData.status === 'fulfilled') setPrintingCode(codeData.value.code);
-    } catch (err) {
-      console.error('Error loading dashboard data', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const handleUploaded = (newJob: PrintJob) => {
-    setJobs((prev) => [newJob, ...prev]);
-    // Refresh stats
-    statsApi.get().then(setStats).catch(console.error);
+    addJob(newJob);
   };
 
   const handleJobDeleted = (id: string) => {
-    setJobs((prev) => prev.filter((j) => j.id !== id));
-    statsApi.get().then(setStats).catch(console.error);
+    removeJob(id);
   };
 
   const handleCopyCode = () => {
@@ -70,7 +43,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Sparkline Stats Panel */}
-      <StatsPanel stats={stats} loading={loading} />
+      <StatsPanel stats={stats} loading={!initialLoaded && !stats} />
 
       {/* Main Grid: Upload & Queue (left), Printing Code (right) */}
       <div className="dashboard-grid">

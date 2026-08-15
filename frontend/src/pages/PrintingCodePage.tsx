@@ -1,29 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
+import { useData } from '../context/DataContext';
 import { codeApi } from '../api/code';
 import { Key, ShieldCheck, Spinner, CheckCircle, WarningCircle, Lock, Copy, Check } from '@phosphor-icons/react';
 
 export const PrintingCodePage: React.FC = () => {
-  const [printingCode, setPrintingCode] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
+  const { printingCode: initialCode, setPrintingCodeLocal } = useData();
+  const [printingCode, setPrintingCode] = useState<string>(initialCode || '');
   const [saving, setSaving] = useState<boolean>(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
-    const fetchCode = async () => {
-      try {
-        const res = await codeApi.get();
-        setPrintingCode(res.code || '');
-      } catch (err) {
-        console.error('Failed to load code', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCode();
-  }, []);
+    if (initialCode) {
+      setPrintingCode(initialCode);
+    }
+  }, [initialCode]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +26,7 @@ export const PrintingCodePage: React.FC = () => {
 
     try {
       await codeApi.save(printingCode);
+      setPrintingCodeLocal(printingCode);
       setSuccess('Printing code encrypted and saved successfully!');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save printing code.');
@@ -61,7 +55,7 @@ export const PrintingCodePage: React.FC = () => {
         </div>
 
         {/* Live Code Preview Card */}
-        {printingCode && !loading && (
+        {printingCode && (
           <div
             className="pulse-code-glow responsive-card"
             style={{
@@ -181,12 +175,7 @@ export const PrintingCodePage: React.FC = () => {
             </div>
           )}
 
-          {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '24px' }}>
-              <Spinner size={24} className="animate-spin" color="var(--accent-sage)" />
-            </div>
-          ) : (
-            <form onSubmit={handleSave}>
+          <form onSubmit={handleSave}>
               <div style={{ marginBottom: '20px' }}>
                 <label
                   style={{
@@ -255,7 +244,6 @@ export const PrintingCodePage: React.FC = () => {
                 )}
               </button>
             </form>
-          )}
         </div>
 
         {/* Security Info Card */}

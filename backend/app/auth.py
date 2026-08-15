@@ -33,7 +33,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 4  # 4 hours
 def hash_password(password: str) -> str:
     # Truncate at 72 bytes per bcrypt spec
     pw_bytes = password.encode("utf-8")[:72]
-    salt = bcrypt.gensalt(12)
+    salt = bcrypt.gensalt(10)
     return bcrypt.hashpw(pw_bytes, salt).decode("utf-8")
 
 

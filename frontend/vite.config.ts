@@ -12,4 +12,17 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    target: 'esnext',
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom', 'axios'],
+          icons: ['@phosphor-icons/react'],
+          charts: ['d3-shape', 'd3-scale'],
+        },
+      },
+    },
+  },
 });

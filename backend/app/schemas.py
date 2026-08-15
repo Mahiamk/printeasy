@@ -35,6 +35,7 @@ class UserOut(BaseModel):
     email: str
     created_at: datetime
     has_printing_code: bool
+    is_superadmin: bool = False
 
     class Config:
         from_attributes = True
@@ -91,3 +92,39 @@ class StatsResponse(BaseModel):
     size_per_day: list[DailyCount]
     bw_pages_per_day: list[DailyCount]
     color_pages_per_day: list[DailyCount]
+
+
+# --- Superadmin Analytics ---
+class SuperadminStatsResponse(BaseModel):
+    total_users: int
+    total_printed_jobs: int
+    total_queued_jobs: int
+    total_bw_pages_printed: int
+    total_color_pages_printed: int
+    total_storage_mb: float
+
+
+class PrintTrendPoint(BaseModel):
+    date_label: str
+    raw_date: str
+    bw_pages: int
+    color_pages: int
+    total_jobs: int
+    bw_jobs: int
+    color_jobs: int
+
+
+class SuperadminTrendsResponse(BaseModel):
+    period: str  # 'daily' | 'weekly' | 'monthly'
+    data: list[PrintTrendPoint]
+
+
+class AdminUserItem(BaseModel):
+    id: UUID
+    email: str
+    created_at: datetime
+    is_superadmin: bool = False
+    total_jobs: int
+    printed_jobs: int
+    bw_pages_used: int
+    color_pages_used: int

@@ -6,6 +6,7 @@ import {
   Gear,
   SignOut,
   Printer,
+  ShieldCheck,
   X,
 } from '@phosphor-icons/react';
 import { useAuth } from '../../context/AuthContext';
@@ -16,7 +17,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile }) => {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -28,6 +29,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
     { to: '/dashboard', label: 'Dashboard', icon: <House size={20} weight="duotone" /> },
     { to: '/code', label: 'Printing Code', icon: <Key size={20} weight="duotone" /> },
     { to: '/settings', label: 'Settings', icon: <Gear size={20} weight="duotone" /> },
+    ...(user?.is_superadmin
+      ? [{ to: '/admin', label: 'Admin Console', icon: <ShieldCheck size={20} weight="duotone" /> }]
+      : []),
   ];
 
   const sidebarContent = (

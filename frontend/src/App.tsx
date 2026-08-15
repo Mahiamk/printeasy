@@ -10,6 +10,7 @@ import { PrintScreen } from './pages/PrintScreen';
 import { PrintingCodePage } from './pages/PrintingCodePage';
 import { Settings } from './pages/Settings';
 import { SuperadminDashboard } from './pages/SuperadminDashboard';
+import { VerifyEmail } from './pages/VerifyEmail';
 import { Spinner } from '@phosphor-icons/react';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -106,6 +107,7 @@ export const App: React.FC = () => {
                 </PublicRoute>
               }
             />
+            <Route path="/verify" element={<VerifyEmail />} />
             <Route
               path="/dashboard"
               element={

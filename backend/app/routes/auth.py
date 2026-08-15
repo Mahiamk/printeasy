@@ -11,6 +11,7 @@ from ..schemas import (
     UserOut,
     GoogleLoginRequest,
     GoogleConfigResponse,
+    MessageResponse,
 )
 from ..auth import (
     hash_password,
@@ -20,7 +21,9 @@ from ..auth import (
     AuthenticatedUser,
     SECRET_KEY_BYTES,
 )
+from ..email_service import send_verification_email
 import os
+import uuid
 import hmac
 import hashlib
 import httpx
@@ -102,11 +105,12 @@ async def google_auth(req: GoogleLoginRequest, db: AsyncSession = Depends(get_db
     user = res.scalar_one_or_none()
 
     if not user:
-        # Create new user for Google login
+        # Create new user for Google login — auto-verified since Google verified the email
         dummy_hash = hash_password(session_password)
         user = User(
             email=email,
             password_hash=dummy_hash,
+            is_verified=True,  # Google-authenticated users are auto-verified
         )
         db.add(user)
         await db.commit()
@@ -116,7 +120,7 @@ async def google_auth(req: GoogleLoginRequest, db: AsyncSession = Depends(get_db
     return TokenResponse(access_token=token)
 
 
-@router.post("/register", response_model=TokenResponse)
+@router.post("/register", response_model=MessageResponse)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     email = req.email.strip().lower()
     if req.password != req.confirm_password:
@@ -133,22 +137,91 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     # Check existing user
     stmt = select(User).where(User.email == email)
     res = await db.execute(stmt)
-    if res.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists.",
-        )
+    existing = res.scalar_one_or_none()
 
+    if existing:
+        if existing.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this email already exists.",
+            )
+        else:
+            # Re-send verification for unverified account — update password & token
+            verification_token = uuid.uuid4().hex
+            existing.password_hash = hash_password(req.password)
+            existing.verification_token = verification_token
+            await db.commit()
+            send_verification_email(email, verification_token)
+            return MessageResponse(message="Verification email sent. Please check your inbox.")
+
+    # Create unverified user with verification token
+    verification_token = uuid.uuid4().hex
     user = User(
         email=email,
         password_hash=hash_password(req.password),
+        is_verified=False,
+        verification_token=verification_token,
     )
     db.add(user)
     await db.commit()
-    await db.refresh(user)
 
-    token = create_access_token(user.id, user.email, req.password)
-    return TokenResponse(access_token=token)
+    # Send verification email via Resend
+    send_verification_email(email, verification_token)
+
+    return MessageResponse(message="Verification email sent. Please check your inbox.")
+
+
+@router.get("/verify")
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    """Verify user's email from the activation link."""
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification token is required.",
+        )
+
+    stmt = select(User).where(User.verification_token == token)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token.",
+        )
+
+    if user.is_verified:
+        return {"message": "Email already verified. You can log in.", "already_verified": True}
+
+    user.is_verified = True
+    user.verification_token = None  # Invalidate token after use
+    await db.commit()
+
+    return {"message": "Email verified successfully! You can now log in.", "verified": True}
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+async def resend_verification(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Resend verification email for unverified accounts."""
+    email = req.email.strip().lower()
+    stmt = select(User).where(User.email == email)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+
+    if not user:
+        # Don't reveal whether email exists
+        return MessageResponse(message="If this email is registered, a verification link has been sent.")
+
+    if user.is_verified:
+        return MessageResponse(message="This account is already verified. Please log in.")
+
+    # Generate new token
+    verification_token = uuid.uuid4().hex
+    user.verification_token = verification_token
+    await db.commit()
+
+    send_verification_email(email, verification_token)
+    return MessageResponse(message="Verification email sent. Please check your inbox.")
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -162,6 +235,13 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
+        )
+
+    # Block unverified users from logging in
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in. Check your inbox for the activation link.",
         )
 
     token = create_access_token(user.id, user.email, req.password)

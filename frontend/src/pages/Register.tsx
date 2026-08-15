@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Printer, Lock, EnvelopeSimple, Spinner, WarningCircle } from '@phosphor-icons/react';
+import { Link } from 'react-router-dom';
+import { Printer, Lock, EnvelopeSimple, Spinner, WarningCircle, CheckCircle, EnvelopeOpen } from '@phosphor-icons/react';
 import { authApi } from '../api/auth';
-import { useAuth } from '../context/AuthContext';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 
 export const Register: React.FC = () => {
-  const navigate = useNavigate();
-  const { login } = useAuth();
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,15 +27,108 @@ export const Register: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await authApi.register(email, password, confirmPassword);
-      await login(res.access_token);
-      navigate('/dashboard');
+      await authApi.register(email, password, confirmPassword);
+      setEmailSent(true);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Success state — verification email sent
+  if (emailSent) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg-app)',
+          padding: '24px',
+        }}
+      >
+        <div
+          className="animate-fade-in responsive-card"
+          style={{
+            width: '100%',
+            maxWidth: '420px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-card)',
+            borderRadius: 'var(--radius-xl)',
+            padding: '40px 24px',
+            boxShadow: 'var(--shadow-lg)',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              display: 'inline-flex',
+              background: 'var(--accent-sage)',
+              color: 'var(--text-inverse)',
+              padding: '16px',
+              borderRadius: '50%',
+              marginBottom: '20px',
+            }}
+          >
+            <EnvelopeOpen size={32} weight="duotone" />
+          </div>
+
+          <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
+            Check Your Email
+          </h2>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '4px' }}>
+            We've sent a verification link to
+          </p>
+          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-sage)', marginBottom: '20px' }}>
+            {email}
+          </p>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '28px' }}>
+            Click the link in the email to activate your account, then come back and log in.
+          </p>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(107, 143, 113, 0.1)',
+              border: '1px solid rgba(107, 143, 113, 0.2)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 16px',
+              fontSize: '13px',
+              color: 'var(--accent-sage)',
+              marginBottom: '24px',
+            }}
+          >
+            <CheckCircle size={18} weight="fill" />
+            <span>Didn't receive it? Check your spam folder.</span>
+          </div>
+
+          <Link
+            to="/login"
+            style={{
+              display: 'block',
+              width: '100%',
+              background: 'var(--accent-sage)',
+              color: 'var(--text-inverse)',
+              padding: '12px',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '15px',
+              fontWeight: 600,
+              textDecoration: 'none',
+              textAlign: 'center',
+              boxShadow: 'var(--shadow-glow-sage)',
+              boxSizing: 'border-box',
+            }}
+          >
+            Go to Login
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -11,3 +11,4 @@ python-dotenv>=1.0.1
 pydantic[email]>=2.9.0
 apscheduler>=3.10.4
 greenlet>=3.0.0
+alembic>=1.19.1

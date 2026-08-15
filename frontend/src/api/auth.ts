@@ -5,6 +5,7 @@ export interface User {
   email: string;
   created_at: string;
   has_printing_code: boolean;
+  is_superadmin?: boolean;
 }
 
 export interface AuthResponse {

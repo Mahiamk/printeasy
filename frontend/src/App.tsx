@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard';
 import { PrintScreen } from './pages/PrintScreen';
 import { PrintingCodePage } from './pages/PrintingCodePage';
 import { Settings } from './pages/Settings';
+import { SuperadminDashboard } from './pages/SuperadminDashboard';
 import { Spinner } from '@phosphor-icons/react';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -33,6 +34,36 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (!user && !localStorage.getItem('printeasy_token')) {
     return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const SuperadminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg-app)',
+        }}
+      >
+        <Spinner size={36} className="animate-spin" color="var(--accent-sage)" />
+      </div>
+    );
+  }
+
+  if (!user && !localStorage.getItem('printeasy_token')) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user && !user.is_superadmin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -105,6 +136,14 @@ export const App: React.FC = () => {
                 <ProtectedRoute>
                   <Settings />
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <SuperadminRoute>
+                  <SuperadminDashboard />
+                </SuperadminRoute>
               }
             />
             <Route path="*" element={<Navigate to="/" replace />} />

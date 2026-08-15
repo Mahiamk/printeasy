@@ -47,12 +47,14 @@ async def cleanup_expired_jobs():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database schema additions
+    # Ensure database tables exist (creates from models if missing)
     try:
-        from app.database import engine
-        from sqlalchemy import text
+        from app.database import engine, Base
+        from app.models import User, PrintJob  # noqa: F401 — register models
         async with engine.begin() as conn:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_superadmin BOOLEAN DEFAULT FALSE;"))
+            await conn.run_sync(Base.metadata.create_all)
+        # Flush stale connections after schema changes
+        await engine.dispose()
     except Exception as e:
         print(f"[Schema Init Note] {e}")
 

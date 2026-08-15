@@ -13,14 +13,28 @@ export interface AuthResponse {
   token_type: string;
 }
 
+export interface MessageResponse {
+  message: string;
+}
+
 export const authApi = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
     const res = await api.post('/api/auth/login', { email, password });
     return res.data;
   },
 
-  register: async (email: string, password: string, confirm_password: string): Promise<AuthResponse> => {
+  register: async (email: string, password: string, confirm_password: string): Promise<MessageResponse> => {
     const res = await api.post('/api/auth/register', { email, password, confirm_password });
+    return res.data;
+  },
+
+  verifyEmail: async (token: string): Promise<{ message: string; verified?: boolean; already_verified?: boolean }> => {
+    const res = await api.get(`/api/auth/verify?token=${token}`);
+    return res.data;
+  },
+
+  resendVerification: async (email: string, password: string): Promise<MessageResponse> => {
+    const res = await api.post('/api/auth/resend-verification', { email, password });
     return res.data;
   },
 

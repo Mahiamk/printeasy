@@ -5,6 +5,11 @@ from typing import Optional
 from .models import PrintJobStatus
 
 
+# --- Generic ---
+class MessageResponse(BaseModel):
+    message: str
+
+
 # --- Auth ---
 class RegisterRequest(BaseModel):
     email: EmailStr

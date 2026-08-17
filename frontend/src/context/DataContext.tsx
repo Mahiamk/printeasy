@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { PrintJob, jobsApi } from '../api/jobs';
 import { StatsResponse, statsApi } from '../api/stats';
 import { codeApi } from '../api/code';
@@ -89,21 +89,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, refreshDashboard]);
 
+  const value = useMemo(() => ({
+    jobs, stats, printingCode, initialLoaded,
+    refreshDashboard, refreshStats, refreshCode,
+    addJob, removeJob, setPrintingCodeLocal,
+  }), [jobs, stats, printingCode, initialLoaded, refreshDashboard, refreshStats, refreshCode, addJob, removeJob, setPrintingCodeLocal]);
+
   return (
-    <DataContext.Provider
-      value={{
-        jobs,
-        stats,
-        printingCode,
-        initialLoaded,
-        refreshDashboard,
-        refreshStats,
-        refreshCode,
-        addJob,
-        removeJob,
-        setPrintingCodeLocal,
-      }}
-    >
+    <DataContext.Provider value={value}>
       {children}
     </DataContext.Provider>
   );

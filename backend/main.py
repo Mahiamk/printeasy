@@ -25,15 +25,14 @@ from app.routes.superadmin import router as superadmin_router
 
 
 async def cleanup_expired_jobs():
-    """Periodic job to clean up expired/printed jobs and files."""
+    """Periodic job to clean up expired queued jobs and blob files."""
     try:
         now = datetime.now(timezone.utc)
         async with AsyncSessionLocal() as db:
+            # Only remove expired unprinted queued jobs from storage and database
             stmt = select(PrintJob).where(
-                or_(
-                    PrintJob.expires_at < now,
-                    PrintJob.status == PrintJobStatus.printed,
-                )
+                PrintJob.status == PrintJobStatus.queued,
+                PrintJob.expires_at < now,
             )
             res = await db.execute(stmt)
             expired_jobs = res.scalars().all()

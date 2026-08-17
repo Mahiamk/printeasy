@@ -54,7 +54,7 @@ export const Dashboard: React.FC = () => {
             colorQuotaRemaining={stats?.color_quota_remaining ?? 20}
             bwQuotaRemaining={stats?.bw_quota_remaining ?? 400}
           />
-          <QueueTable jobs={jobs} onJobDeleted={handleJobDeleted} />
+          <QueueTable jobs={jobs} onJobDeleted={handleJobDeleted} onJobPrinted={handleJobDeleted} />
         </div>
 
         {/* Right Column: Printing Code Card & Quick Guide */}

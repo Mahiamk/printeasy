@@ -66,6 +66,9 @@ BW_QUOTA_MAX = 400
 COLOR_QUOTA_MAX = 20
 
 
+from ..page_counter import detect_file_page_count
+
+
 @router.post("/upload", response_model=PrintJobOut)
 async def upload_job(
     file: UploadFile = File(...),
@@ -85,8 +88,22 @@ async def upload_job(
             detail=f"Unsupported file type '{ext}'. Allowed: PDF, DOCX, DOC, PNG, JPG, GIF, BMP, TIFF, WEBP.",
         )
 
+    # Read and validate size
+    file_bytes = await file.read()
+    file_size = len(file_bytes)
+    await file.seek(0)
+
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large ({(file_size / (1024*1024)):.1f}MB). Maximum allowed is 20MB.",
+        )
+
+    # Automatically detect page count from actual file content (PDF, DOCX, Images)
+    detected_pages = detect_file_page_count(file_bytes, filename)
+    pages = max(1, detected_pages if detected_pages > 0 else (page_count or 1))
+
     mode = "color" if color_mode.lower() == "color" else "bw"
-    pages = max(1, min(page_count, 100))
 
     # Calculate current quota usage (printed + active in queue)
     now = datetime.now(timezone.utc)
@@ -101,14 +118,14 @@ async def upload_job(
             detail=f"Queue limit reached ({MAX_QUEUE_SIZE} files maximum).",
         )
 
-    # Check color / BW quota
+    # Check color / BW quota against auto-detected page count
     if mode == "color":
         used_color = sum(j.page_count for j in user_jobs if j.color_mode == "color")
         if used_color + pages > COLOR_QUOTA_MAX:
             remaining = max(0, COLOR_QUOTA_MAX - used_color)
             raise HTTPException(
                 status_code=400,
-                detail=f"Color quota exceeded! You requested {pages} pages, but only have {remaining} color pages remaining (out of {COLOR_QUOTA_MAX}).",
+                detail=f"Color quota exceeded! Document has {pages} pages, but you only have {remaining} color pages remaining (out of {COLOR_QUOTA_MAX}).",
             )
     else:
         used_bw = sum(j.page_count for j in user_jobs if j.color_mode != "color")
@@ -116,20 +133,8 @@ async def upload_job(
             remaining = max(0, BW_QUOTA_MAX - used_bw)
             raise HTTPException(
                 status_code=400,
-                detail=f"Black & White quota exceeded! You requested {pages} pages, but only have {remaining} B&W pages remaining (out of {BW_QUOTA_MAX}).",
+                detail=f"Black & White quota exceeded! Document has {pages} pages, but you only have {remaining} B&W pages remaining (out of {BW_QUOTA_MAX}).",
             )
-
-    # Read and validate size
-    file_size = 0
-    file.file.seek(0, 2)
-    file_size = file.file.tell()
-    file.file.seek(0)
-
-    if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File too large ({(file_size / (1024*1024)):.1f}MB). Maximum allowed is 20MB.",
-        )
 
     # Upload to Vercel Blob or local storage
     blob_url = await upload_blob_file(file, filename)
@@ -152,9 +157,13 @@ async def upload_job(
     return job
 
 
+from ..schemas import PrintJobOut, MarkPrintedRequest
+
+
 @router.patch("/{job_id}/print", response_model=PrintJobOut)
 async def mark_as_printed(
     job_id: UUID,
+    req: MarkPrintedRequest | None = None,
     current_user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -165,6 +174,14 @@ async def mark_as_printed(
     job = res.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Print job not found.")
+
+    # Apply any adjusted print settings (copies, pages, color) before calculating final quota
+    if req:
+        if req.color_mode and req.color_mode.lower() in ("color", "bw"):
+            job.color_mode = req.color_mode.lower()
+        if req.page_count is not None and req.page_count > 0:
+            copies = max(1, min(req.copies or 1, 50))
+            job.page_count = max(1, min(req.page_count * copies, 500))
 
     # Delete blob storage
     await delete_blob_file(job.blob_url)

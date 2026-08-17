@@ -1,6 +1,17 @@
 import React, { useRef, useState } from 'react';
-import { CloudArrowUp, Spinner, WarningCircle, CheckCircle, Palette, FileText } from '@phosphor-icons/react';
+import {
+  CloudArrowUp,
+  Spinner,
+  WarningCircle,
+  CheckCircle,
+  Palette,
+  FileText,
+  Sparkle,
+  Plus,
+  Minus,
+} from '@phosphor-icons/react';
 import { jobsApi, PrintJob } from '../../api/jobs';
+import { detectClientPageCount } from '../../utils/pageDetector';
 
 interface DropZoneProps {
   onUploaded: (job: PrintJob) => void;
@@ -17,6 +28,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
   const [uploading, setUploading] = useState(false);
   const [colorMode, setColorMode] = useState<'bw' | 'color'>('bw');
   const [pageCount, setPageCount] = useState<number>(1);
+  const [detectedInfo, setDetectedInfo] = useState<{ name: string; pages: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,20 +43,31 @@ export const DropZone: React.FC<DropZoneProps> = ({
       return;
     }
 
-    // Check quota
+    // Automatically determine page count from file
+    let detected = 1;
+    try {
+      detected = await detectClientPageCount(file);
+      setDetectedInfo({ name: file.name, pages: detected });
+      setPageCount(detected);
+    } catch {
+      detected = pageCount;
+    }
+
+    // Check quota against detected page count
     const quotaLeft = colorMode === 'color' ? colorQuotaRemaining : bwQuotaRemaining;
-    if (pageCount > quotaLeft) {
+    if (detected > quotaLeft) {
       setError(
-        `Insufficient ${colorMode === 'color' ? 'Color' : 'B&W'} quota! Need ${pageCount} pgs, have ${quotaLeft} left.`
+        `Insufficient ${colorMode === 'color' ? 'Color' : 'B&W'} quota! Document has ${detected} pgs, but you only have ${quotaLeft} remaining.`
       );
       return;
     }
 
     setUploading(true);
     try {
-      const job = await jobsApi.upload(file, colorMode, pageCount);
-      setSuccess(`"${file.name}" queued (${colorMode.toUpperCase()}, ${pageCount} pgs)!`);
+      const job = await jobsApi.upload(file, colorMode, detected);
+      setSuccess(`"${file.name}" queued (${job.page_count} ${job.page_count === 1 ? 'page' : 'pages'}, ${colorMode.toUpperCase()})!`);
       onUploaded(job);
+      setDetectedInfo(null);
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Upload failed. Please try again.';
       setError(msg);
@@ -87,7 +110,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
           Upload Document to Queue
         </h3>
         <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          Select print type & page count before uploading
+          Page count is automatically detected from your file upon upload
         </p>
       </div>
 
@@ -106,9 +129,14 @@ export const DropZone: React.FC<DropZoneProps> = ({
       >
         {/* Color Mode Selector */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
-            Print Type:
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
+              Print Type:
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--accent-sage)', fontWeight: 600 }}>
+              ✨ Auto page detection enabled
+            </span>
+          </div>
           <div
             style={{
               display: 'flex',
@@ -136,10 +164,11 @@ export const DropZone: React.FC<DropZoneProps> = ({
                 color: colorMode === 'bw' ? 'var(--text-inverse)' : 'var(--text-secondary)',
                 transition: 'all var(--transition-fast)',
                 whiteSpace: 'nowrap',
+                cursor: 'pointer',
               }}
             >
               <FileText size={16} weight="duotone" />
-              <span>B&W (400)</span>
+              <span>B&W ({bwQuotaRemaining} left)</span>
             </button>
 
             <button
@@ -159,148 +188,55 @@ export const DropZone: React.FC<DropZoneProps> = ({
                 color: colorMode === 'color' ? 'var(--text-inverse)' : 'var(--text-secondary)',
                 transition: 'all var(--transition-fast)',
                 whiteSpace: 'nowrap',
+                cursor: 'pointer',
               }}
             >
               <Palette size={16} weight="duotone" />
-              <span>Color (20)</span>
+              <span>Color ({colorQuotaRemaining} left)</span>
             </button>
           </div>
         </div>
 
-        {/* Page Count Selector */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '8px',
-            paddingTop: '6px',
-            borderTop: '1px solid var(--border-subtle)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
-              Pages:
+        {/* Auto-detected Info Pill if file selected */}
+        {detectedInfo && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(127, 166, 138, 0.1)',
+              border: '1px solid rgba(127, 166, 138, 0.25)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '6px 10px',
+              fontSize: '12px',
+            }}
+          >
+            <span style={{ color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' }}>
+              📄 {detectedInfo.name}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <button
-                type="button"
-                onClick={() => setPageCount((p) => Math.max(1, p - 1))}
-                style={{
-                  background: 'var(--bg-app)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: 'var(--radius-xs)',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                -
-              </button>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={pageCount}
-                onChange={(e) => setPageCount(Math.max(1, parseInt(e.target.value) || 1))}
-                style={{
-                  width: '44px',
-                  height: '30px',
-                  background: 'var(--bg-app)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-xs)',
-                  textAlign: 'center',
-                  color: 'var(--text-primary)',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  outline: 'none',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setPageCount((p) => p + 1)}
-                style={{
-                  background: 'var(--bg-app)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: 'var(--radius-xs)',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                +
-              </button>
-            </div>
+            <span style={{ color: 'var(--accent-sage)', fontWeight: 700 }}>
+              {detectedInfo.pages} {detectedInfo.pages === 1 ? 'page' : 'pages'} detected
+            </span>
           </div>
-
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            ({colorMode === 'color' ? colorQuotaRemaining : bwQuotaRemaining} left)
-          </span>
-        </div>
+        )}
       </div>
 
-      {error && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'var(--accent-rose-subtle)',
-            border: '1px solid rgba(196, 132, 122, 0.3)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '8px 12px',
-            color: 'var(--accent-rose)',
-            fontSize: '12px',
-            marginBottom: '12px',
-          }}
-        >
-          <WarningCircle size={16} weight="duotone" style={{ flexShrink: 0 }} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {success && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'var(--accent-sage-subtle)',
-            border: '1px solid rgba(127, 166, 138, 0.3)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '8px 12px',
-            color: 'var(--accent-sage)',
-            fontSize: '12px',
-            marginBottom: '12px',
-          }}
-        >
-          <CheckCircle size={16} weight="duotone" style={{ flexShrink: 0 }} />
-          <span>{success}</span>
-        </div>
-      )}
-
+      {/* Drop Zone Area */}
       <div
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         onClick={() => fileInputRef.current?.click()}
         style={{
-          border: `2px dashed ${isDragging ? 'var(--accent-sage)' : 'rgba(255, 255, 255, 0.12)'}`,
-          background: isDragging ? 'var(--accent-sage-subtle)' : 'var(--bg-elevated)',
+          border: isDragging
+            ? '2px dashed var(--accent-sage)'
+            : '2px dashed rgba(255, 255, 255, 0.12)',
           borderRadius: 'var(--radius-md)',
-          padding: '24px 14px',
+          padding: '28px 16px',
           textAlign: 'center',
           cursor: uploading ? 'not-allowed' : 'pointer',
-          transition: 'all var(--transition-normal)',
+          background: isDragging ? 'var(--accent-sage-subtle)' : 'var(--bg-elevated)',
+          transition: 'all var(--transition-fast)',
         }}
       >
         <input
@@ -308,7 +244,6 @@ export const DropZone: React.FC<DropZoneProps> = ({
           type="file"
           accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.bmp,.tiff,.webp"
           style={{ display: 'none' }}
-          disabled={uploading}
           onChange={(e) => {
             if (e.target.files && e.target.files[0]) {
               handleFile(e.target.files[0]);
@@ -318,36 +253,79 @@ export const DropZone: React.FC<DropZoneProps> = ({
         />
 
         {uploading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-            <Spinner size={28} weight="bold" color="var(--accent-sage)" className="animate-spin" />
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Uploading document ({pageCount} pgs)...
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <Spinner size={32} className="animate-spin" color="var(--accent-sage)" />
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>
+              Detecting pages & uploading to cloud storage...
             </p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
             <div
               style={{
-                background: colorMode === 'color' ? 'var(--accent-rose-subtle)' : 'var(--accent-sage-subtle)',
-                color: colorMode === 'color' ? 'var(--accent-rose)' : 'var(--accent-sage)',
+                background: 'var(--bg-card)',
                 padding: '12px',
                 borderRadius: 'var(--radius-full)',
+                color: 'var(--accent-sage)',
                 display: 'flex',
+                boxShadow: 'var(--shadow-sm)',
               }}
             >
               <CloudArrowUp size={28} weight="duotone" />
             </div>
             <div>
               <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Tap to <span style={{ color: colorMode === 'color' ? 'var(--accent-rose)' : 'var(--accent-sage)' }}>browse file</span>
+                Click to upload or drag and drop
               </p>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Queue as <strong>{colorMode === 'color' ? '🎨 Color' : '📄 B&W'}</strong> • {pageCount} {pageCount === 1 ? 'page' : 'pages'} (PDF, DOCX, PNG, JPG ≤ 20MB)
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                PDF, Word (DOCX), or Images (PNG, JPG, WEBP) • Up to 20MB
               </p>
             </div>
           </div>
         )}
       </div>
+
+      {/* Success Banner */}
+      {success && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'var(--accent-sage-subtle)',
+            border: '1px solid rgba(127, 166, 138, 0.3)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '10px 14px',
+            color: 'var(--accent-sage)',
+            fontSize: '13px',
+            marginTop: '12px',
+          }}
+        >
+          <CheckCircle size={18} weight="fill" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* Error Banner */}
+      {error && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'var(--accent-rose-subtle)',
+            border: '1px solid rgba(196, 132, 122, 0.3)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '10px 14px',
+            color: 'var(--accent-rose)',
+            fontSize: '13px',
+            marginTop: '12px',
+          }}
+        >
+          <WarningCircle size={18} weight="duotone" />
+          <span>{error}</span>
+        </div>
+      )}
     </div>
   );
 };

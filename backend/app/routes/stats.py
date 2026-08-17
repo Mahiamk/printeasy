@@ -30,12 +30,18 @@ async def get_user_stats(
     total_queued = sum(1 for j in all_jobs if j.status == PrintJobStatus.queued and j.expires_at > now)
     storage_mb = sum(j.file_size for j in all_jobs if j.status == PrintJobStatus.queued and j.expires_at > now) / (1024 * 1024)
 
-    # Quota calculations (400 B&W, 20 Color)
+    # Quota calculations (400 B&W, 20 Color) based strictly on pages ACTUALLY PRINTED
     BW_TOTAL = 400
     COLOR_TOTAL = 20
 
-    bw_used = sum(j.page_count for j in all_jobs if j.color_mode != "color")
-    color_used = sum(j.page_count for j in all_jobs if j.color_mode == "color")
+    bw_used = sum(
+        j.page_count for j in all_jobs
+        if j.status == PrintJobStatus.printed and j.color_mode != "color"
+    )
+    color_used = sum(
+        j.page_count for j in all_jobs
+        if j.status == PrintJobStatus.printed and j.color_mode == "color"
+    )
 
     # Calculate 7-day sparkline buckets
     daily_uploads: dict[str, int] = {}
@@ -59,14 +65,15 @@ async def get_user_stats(
             if day_key in daily_uploads:
                 daily_uploads[day_key] += 1
                 daily_sizes[day_key] += job.file_size / (1024 * 1024)
-                if job.color_mode == "color":
-                    daily_color_pages[day_key] += job.page_count
-                else:
-                    daily_bw_pages[day_key] += job.page_count
-        if job.printed_at and job.printed_at >= start_date:
+
+        if job.printed_at and job.printed_at >= start_date and job.status == PrintJobStatus.printed:
             day_key = job.printed_at.strftime("%b %d")
             if day_key in daily_prints:
                 daily_prints[day_key] += 1
+            if day_key in daily_color_pages and job.color_mode == "color":
+                daily_color_pages[day_key] += job.page_count
+            elif day_key in daily_bw_pages:
+                daily_bw_pages[day_key] += job.page_count
 
     uploads_per_day = [
         DailyCount(date=k, count=v, size_mb=round(daily_sizes[k], 2))

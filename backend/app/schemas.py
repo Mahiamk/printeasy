@@ -64,6 +64,13 @@ class PrintJobOut(BaseModel):
         from_attributes = True
 
 
+class MarkPrintedRequest(BaseModel):
+    color_mode: Optional[str] = None
+    page_count: Optional[int] = None
+    copies: Optional[int] = 1
+
+
+
 # --- Printing Code ---
 class SavePrintingCodeRequest(BaseModel):
     printing_code: str

@@ -120,7 +120,7 @@ async def upload_job(
 
     # Check color / BW quota against auto-detected page count
     if mode == "color":
-        used_color = sum(j.page_count for j in user_jobs if j.color_mode == "color")
+        used_color = sum(j.page_count for j in user_jobs if j.status == PrintJobStatus.printed and j.color_mode == "color")
         if used_color + pages > COLOR_QUOTA_MAX:
             remaining = max(0, COLOR_QUOTA_MAX - used_color)
             raise HTTPException(
@@ -128,7 +128,7 @@ async def upload_job(
                 detail=f"Color quota exceeded! Document has {pages} pages, but you only have {remaining} color pages remaining (out of {COLOR_QUOTA_MAX}).",
             )
     else:
-        used_bw = sum(j.page_count for j in user_jobs if j.color_mode != "color")
+        used_bw = sum(j.page_count for j in user_jobs if j.status == PrintJobStatus.printed and j.color_mode != "color")
         if used_bw + pages > BW_QUOTA_MAX:
             remaining = max(0, BW_QUOTA_MAX - used_bw)
             raise HTTPException(

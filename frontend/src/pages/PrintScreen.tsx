@@ -51,7 +51,7 @@ export const PrintScreen: React.FC = () => {
     fetchJobAndCode();
   }, [id, navigate]);
 
-  const handleDirectPrint = () => {
+  const handleDirectPrint = async () => {
     if (!job) return;
 
     // Direct browser print trigger
@@ -60,30 +60,47 @@ export const PrintScreen: React.FC = () => {
       existingFrame.remove();
     }
 
-    // Try iframe print for PDFs and images
-    const iframe = document.createElement('iframe');
-    iframe.id = 'print-target-iframe';
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.src = job.blob_url;
+    try {
+      const response = await fetch(job.blob_url);
+      if (!response.ok) throw new Error('Failed to load file');
 
-    iframe.onload = () => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch (err) {
-        // Fallback: Open in dedicated print tab and invoke print
-        const printWindow = window.open(job.blob_url, '_blank');
-        printWindow?.focus();
-        setTimeout(() => printWindow?.print(), 500);
-      }
-    };
+      const blob = await response.blob();
+      const localUrl = URL.createObjectURL(blob);
 
-    document.body.appendChild(iframe);
+      const iframe = document.createElement('iframe');
+      iframe.id = 'print-target-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.opacity = '0';
+      iframe.src = localUrl;
+
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch {
+          window.open(localUrl, '_blank')?.print();
+        }
+        setTimeout(() => {
+          iframe.remove();
+          URL.revokeObjectURL(localUrl);
+        }, 3000);
+      };
+
+      iframe.onerror = () => {
+        window.open(job.blob_url, '_blank');
+        iframe.remove();
+        URL.revokeObjectURL(localUrl);
+      };
+
+      document.body.appendChild(iframe);
+    } catch {
+      window.open(job.blob_url, '_blank');
+    }
   };
 
   // Keyboard shortcut Ctrl+P / Cmd+P listener

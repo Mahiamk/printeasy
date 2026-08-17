@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { User, authApi } from '../api/auth';
 
 interface AuthContextType {
@@ -17,44 +17,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('printeasy_token'));
   const [loading, setLoading] = useState<boolean>(true);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
+    const storedToken = localStorage.getItem('printeasy_token');
+    if (!storedToken) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
     try {
-      if (!localStorage.getItem('printeasy_token')) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
       const me = await authApi.getMe();
       setUser(me);
-    } catch (err) {
-      console.error('Failed to fetch current user', err);
+    } catch {
       setUser(null);
       localStorage.removeItem('printeasy_token');
       setToken(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Only fetch user on mount (not on every token change — login() handles that)
   useEffect(() => {
     refreshUser();
-  }, [token]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const login = async (newToken: string) => {
+  const login = useCallback(async (newToken: string) => {
     localStorage.setItem('printeasy_token', newToken);
     setToken(newToken);
-    const me = await authApi.getMe();
-    setUser(me);
-  };
+    try {
+      const me = await authApi.getMe();
+      setUser(me);
+    } catch {
+      localStorage.removeItem('printeasy_token');
+      setToken(null);
+      setUser(null);
+    }
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('printeasy_token');
     setToken(null);
     setUser(null);
-  };
+  }, []);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
+    user, token, loading, login, logout, refreshUser,
+  }), [user, token, loading, login, logout, refreshUser]);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

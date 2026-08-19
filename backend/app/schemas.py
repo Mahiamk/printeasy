@@ -22,19 +22,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class GoogleLoginRequest(BaseModel):
-    id_token: str
-
-
-class GoogleConfigResponse(BaseModel):
-    client_id: Optional[str] = None
-
-
 class UserOut(BaseModel):
     id: UUID
     email: str
@@ -44,6 +31,21 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: Optional[UserOut] = None
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+
+class GoogleConfigResponse(BaseModel):
+    client_id: Optional[str] = None
+
 
 
 # --- Print Jobs ---

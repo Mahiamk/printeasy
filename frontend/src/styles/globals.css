@@ -237,12 +237,13 @@ textarea {
   }
 
   .responsive-hero-title {
-    font-size: 28px !important;
-    line-height: 1.2 !important;
+    font-size: 36px !important;
+    line-height: 1.18 !important;
+    letter-spacing: -0.025em !important;
   }
 
   .responsive-hero-p {
-    font-size: 14px !important;
+    font-size: 15px !important;
   }
 
   .responsive-card {
@@ -261,6 +262,9 @@ textarea {
   }
 
   .responsive-hero-title {
-    font-size: 24px !important;
+    font-size: 30px !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.02em !important;
   }
 }
+

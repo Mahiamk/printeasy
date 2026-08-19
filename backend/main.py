@@ -46,25 +46,16 @@ async def cleanup_expired_jobs():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database tables exist (creates from models if missing)
-    try:
-        from app.database import engine, Base
-        from app.models import User, PrintJob  # noqa: F401 — register models
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        # Flush stale connections after schema changes
-        await engine.dispose()
-    except Exception as e:
-        print(f"[Schema Init Note] {e}")
-
-    # Start background cleanup task if running in continuous server mode
+    # Only start background scheduler if running as a standalone persistent server (not on Vercel Serverless)
     scheduler = None
-    try:
-        scheduler = AsyncIOScheduler()
-        scheduler.add_job(cleanup_expired_jobs, "interval", minutes=30)
-        scheduler.start()
-    except Exception as e:
-        print(f"[Lifespan Scheduler Note] {e}")
+    is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+    if not is_serverless:
+        try:
+            scheduler = AsyncIOScheduler()
+            scheduler.add_job(cleanup_expired_jobs, "interval", minutes=30)
+            scheduler.start()
+        except Exception as e:
+            print(f"[Lifespan Scheduler Note] {e}")
 
     yield
 

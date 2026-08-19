@@ -7,77 +7,28 @@ import {
   DeviceMobile,
   ArrowRight,
   Sparkle,
+  ChartPieSlice,
+  CheckCircle,
+  LockKey,
 } from '@phosphor-icons/react';
+import { LandingNavbar } from '../components/landing/LandingNavbar';
 
 export const Landing: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-app)', color: 'var(--text-primary)' }}>
-      {/* Header */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border-subtle)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div
-            style={{
-              background: 'var(--accent-sage)',
-              color: 'var(--text-inverse)',
-              padding: '7px',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-            }}
-          >
-            <Printer size={22} weight="fill" />
-          </div>
-          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em' }}>PrintEasy</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            onClick={() => navigate('/login')}
-            style={{
-              color: 'var(--text-secondary)',
-              fontSize: '14px',
-              fontWeight: 500,
-              padding: '8px 12px',
-            }}
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => navigate('/register')}
-            style={{
-              background: 'var(--accent-sage)',
-              color: 'var(--text-inverse)',
-              fontSize: '14px',
-              fontWeight: 600,
-              padding: '8px 14px',
-              borderRadius: 'var(--radius-sm)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <span>Get Started</span>
-            <ArrowRight size={16} weight="bold" />
-          </button>
-        </div>
-      </header>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-app)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}>
+      {/* Sticky Glassmorphic Navbar with Mobile Hamburger Drawer */}
+      <LandingNavbar />
 
       {/* Hero Section */}
       <section
         style={{
           maxWidth: '960px',
           margin: '0 auto',
-          padding: '56px 20px 48px',
+          padding: '52px 20px 48px',
           textAlign: 'center',
+          flex: '1 0 auto',
         }}
       >
         <div
@@ -90,8 +41,9 @@ export const Landing: React.FC = () => {
             padding: '6px 14px',
             borderRadius: 'var(--radius-full)',
             fontSize: '13px',
-            fontWeight: 500,
+            fontWeight: 600,
             marginBottom: '20px',
+            boxShadow: '0 2px 8px rgba(127, 166, 138, 0.15)',
           }}
         >
           <Sparkle size={16} weight="duotone" />
@@ -101,11 +53,11 @@ export const Landing: React.FC = () => {
         <h1
           className="responsive-hero-title"
           style={{
-            fontSize: '48px',
+            fontSize: '56px',
             fontWeight: 800,
-            lineHeight: 1.15,
-            letterSpacing: '-0.03em',
-            marginBottom: '20px',
+            lineHeight: 1.12,
+            letterSpacing: '-0.035em',
+            marginBottom: '22px',
             color: 'var(--text-primary)',
           }}
         >
@@ -123,25 +75,26 @@ export const Landing: React.FC = () => {
             lineHeight: 1.6,
           }}
         >
-          Students often log into WhatsApp or Telegram on public lab computers to print documents, risking privacy breaches.
-          PrintEasy gives you an isolated, encrypted print queue with your school keypad code ready on release.
+          Students often log into WhatsApp or personal email on public lab computers to print documents, risking privacy breaches.
+          PrintEasy gives you an isolated, encrypted print queue with your school keypad PIN ready on release.
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <button
             onClick={() => navigate('/register')}
             style={{
-              background: 'var(--accent-sage)',
+              background: 'linear-gradient(135deg, #7fa68a 0%, #689274 100%)',
               color: 'var(--text-inverse)',
               fontSize: '15px',
-              fontWeight: 600,
-              padding: '12px 24px',
+              fontWeight: 700,
+              padding: '13px 26px',
               borderRadius: 'var(--radius-md)',
-              boxShadow: 'var(--shadow-glow-sage)',
+              boxShadow: '0 4px 16px rgba(127, 166, 138, 0.35)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              transition: 'var(--transition-fast)',
+              transition: 'all var(--transition-fast)',
+              cursor: 'pointer',
             }}
           >
             <span>Create Student Account</span>
@@ -154,9 +107,11 @@ export const Landing: React.FC = () => {
               border: '1px solid var(--border-card)',
               color: 'var(--text-primary)',
               fontSize: '15px',
-              fontWeight: 500,
-              padding: '12px 20px',
+              fontWeight: 600,
+              padding: '13px 22px',
               borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)',
             }}
           >
             Access My Queue
@@ -166,100 +121,179 @@ export const Landing: React.FC = () => {
 
       {/* Feature Grid */}
       <section
+        id="features"
         style={{
           maxWidth: '1080px',
           margin: '0 auto',
-          padding: '32px 24px 96px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '24px',
+          padding: '24px 20px 48px',
+          width: '100%',
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+            Engineered for Campus Privacy
+          </h2>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Built specifically to prevent account hijacking on shared lab PCs
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '20px',
+          }}
+        >
+          {/* Card 1 */}
+          <div
+            id="how-it-works"
+            className="responsive-card"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '28px',
+            }}
+          >
+            <div
+              style={{
+                background: 'var(--accent-sage-subtle)',
+                color: 'var(--accent-sage)',
+                width: '46px',
+                height: '46px',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+              }}
+            >
+              <DeviceMobile size={24} weight="duotone" />
+            </div>
+            <h3 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)' }}>
+              Upload from Any Device
+            </h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              Upload PDFs, Word files, and images from your smartphone, tablet, or laptop. Page counts are detected automatically.
+            </p>
+          </div>
+
+          {/* Card 2 */}
+          <div
+            className="responsive-card"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '28px',
+            }}
+          >
+            <div
+              style={{
+                background: 'var(--accent-amber-subtle)',
+                color: 'var(--accent-amber)',
+                width: '46px',
+                height: '46px',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+              }}
+            >
+              <Key size={24} weight="duotone" />
+            </div>
+            <h3 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)' }}>
+              Encrypted Release PIN Code
+            </h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              Never forget your physical printer PIN. PrintEasy encrypts it with AES-256-GCM and displays it clearly with auto-hide protection.
+            </p>
+          </div>
+
+          {/* Card 3 */}
+          <div
+            id="security"
+            className="responsive-card"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '28px',
+            }}
+          >
+            <div
+              style={{
+                background: 'var(--accent-blue-subtle)',
+                color: 'var(--accent-blue)',
+                width: '46px',
+                height: '46px',
+                borderRadius: 'var(--radius-md)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+              }}
+            >
+              <ShieldCheck size={24} weight="duotone" />
+            </div>
+            <h3 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)' }}>
+              Zero Leftover Traces
+            </h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              Marking a file as printed immediately purges the document stream from cloud storage. Auto-cleanup wipes expired files after 24h.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Quotas Section */}
+      <section
+        id="quotas"
+        style={{
+          maxWidth: '1080px',
+          margin: '0 auto',
+          padding: '16px 20px 64px',
+          width: '100%',
         }}
       >
         <div
           style={{
-            background: 'var(--bg-card)',
+            background: 'linear-gradient(145deg, rgba(38, 44, 64, 0.6) 0%, rgba(29, 33, 48, 0.8) 100%)',
             border: '1px solid var(--border-card)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '28px',
+            borderRadius: 'var(--radius-xl)',
+            padding: '32px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            gap: '16px',
           }}
         >
-          <div
-            style={{
-              background: 'var(--accent-sage-subtle)',
-              color: 'var(--accent-sage)',
-              width: '44px',
-              height: '44px',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px',
-            }}
-          >
-            <DeviceMobile size={24} weight="duotone" />
+          <div style={{ background: 'rgba(127, 166, 138, 0.15)', color: 'var(--accent-sage)', padding: '10px', borderRadius: 'var(--radius-full)', display: 'flex' }}>
+            <ChartPieSlice size={28} weight="duotone" />
           </div>
-          <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Upload from Any Device</h3>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Upload PDFs, DOCX, and images from your smartphone, tablet, or home laptop. Files wait in your queue for 24 hours.
-          </p>
-        </div>
 
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-card)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '28px',
-          }}
-        >
-          <div
-            style={{
-              background: 'var(--accent-amber-subtle)',
-              color: 'var(--accent-amber)',
-              width: '44px',
-              height: '44px',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px',
-            }}
-          >
-            <Key size={24} weight="duotone" />
-          </div>
-          <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Saved School Release Code</h3>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Never forget your physical printer PIN. PrintEasy encrypts it with AES-256-GCM and displays it clearly on the print screen.
-          </p>
-        </div>
+          <h3 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
+            Transparent Campus Quota Tracking
+          </h3>
 
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-card)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '28px',
-          }}
-        >
-          <div
-            style={{
-              background: 'var(--accent-blue-subtle)',
-              color: 'var(--accent-blue)',
-              width: '44px',
-              height: '44px',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px',
-            }}
-          >
-            <ShieldCheck size={24} weight="duotone" />
-          </div>
-          <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Zero Leftover Traces</h3>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Marking a file as printed immediately purges the document from cloud storage. Auto-cleanup deletes expired files after 24 hours.
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '580px', lineHeight: 1.6 }}>
+            Every registered student receives <strong>400 Black & White</strong> pages and <strong>20 Color</strong> pages per semester with real-time 7-day usage trends.
           </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center', marginTop: '8px' }}>
+            <div style={{ background: 'var(--bg-card)', padding: '12px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-sage)' }}>400 pgs</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Black & White Quota</div>
+            </div>
+
+            <div style={{ background: 'var(--bg-card)', padding: '12px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-rose)' }}>20 pgs</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Color Print Quota</div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -267,13 +301,14 @@ export const Landing: React.FC = () => {
       <footer
         style={{
           borderTop: '1px solid var(--border-subtle)',
-          padding: '28px 48px',
+          padding: '24px 20px',
           textAlign: 'center',
           color: 'var(--text-muted)',
           fontSize: '13px',
+          background: 'var(--bg-sidebar)',
         }}
       >
-        PrintEasy — Student Privacy & Library Print Queue System
+        PrintEasy — Student Privacy & Library Print Queue System • AIU Campus
       </footer>
     </div>
   );

@@ -21,7 +21,7 @@ export const Login: React.FC = () => {
 
     try {
       const res = await authApi.login(email, password);
-      await login(res.access_token);
+      await login(res.access_token, res.user);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid email or password.');

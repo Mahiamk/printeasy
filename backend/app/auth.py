@@ -82,13 +82,14 @@ def _decrypt_session_data(token_str: str) -> str:
     return decrypted.decode("utf-8")
 
 
-def create_access_token(user_id: UUID, email: str, password: str) -> str:
+def create_access_token(user_id: UUID, email: str, password: str, is_superadmin: bool = False) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     encrypted_pw = _encrypt_session_data(password)
     to_encode = {
         "sub": str(user_id),
         "email": email,
         "pdk": encrypted_pw,
+        "admin": is_superadmin,
         "exp": expire,
     }
     encoded_jwt = jwt.encode(to_encode, RAW_SECRET, algorithm=ALGORITHM)

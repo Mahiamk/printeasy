@@ -6,14 +6,38 @@ load_dotenv()
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY") or os.getenv("RESEND_API") or ""
 FROM_EMAIL = os.getenv("FROM_EMAIL", "PrintEasy <onboarding@resend.dev>")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 resend.api_key = RESEND_API_KEY
 
 
+def get_frontend_url() -> str:
+    """
+    Dynamically resolves the correct production or local frontend URL.
+    Prefers production domain on Vercel over hardcoded localhost.
+    """
+    # 1. Check custom FRONTEND_URL if set and valid (not localhost when running in production)
+    custom_url = (os.getenv("FRONTEND_URL") or "").strip().rstrip("/")
+    if custom_url and not (os.getenv("VERCEL") and "localhost" in custom_url):
+        return custom_url if custom_url.startswith("http") else f"https://{custom_url}"
+
+    # 2. Vercel Production Custom Domain / Canonical Project URL
+    vercel_prod = (os.getenv("VERCEL_PROJECT_PRODUCTION_URL") or "").strip().rstrip("/")
+    if vercel_prod:
+        return f"https://{vercel_prod}"
+
+    # 3. Vercel Deployment URL (e.g. printeasy-xxx.vercel.app)
+    vercel_url = (os.getenv("VERCEL_URL") or "").strip().rstrip("/")
+    if vercel_url:
+        return f"https://{vercel_url}"
+
+    # 4. Fallback for local development
+    return custom_url or "http://localhost:5173"
+
+
 def send_verification_email(to_email: str, token: str) -> bool:
     """Send email verification link to newly registered user."""
-    verify_url = f"{FRONTEND_URL}/verify?token={token}"
+    base_url = get_frontend_url()
+    verify_url = f"{base_url}/verify?token={token}"
 
     html = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">

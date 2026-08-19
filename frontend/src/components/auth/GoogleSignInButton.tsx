@@ -72,7 +72,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       setLoading(true);
       try {
         const authRes = await authApi.googleLogin(response.credential);
-        await login(authRes.access_token);
+        await login(authRes.access_token, authRes.user);
         navigate('/dashboard');
       } catch (err: any) {
         const msg = err.response?.data?.detail || 'Google authentication failed.';

@@ -5,7 +5,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (token: string) => Promise<void>;
+  login: (token: string, initialUser?: User) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -41,9 +41,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUser();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const login = useCallback(async (newToken: string) => {
+  const login = useCallback(async (newToken: string, initialUser?: User) => {
     localStorage.setItem('printeasy_token', newToken);
     setToken(newToken);
+    if (initialUser) {
+      setUser(initialUser);
+      return;
+    }
     try {
       const me = await authApi.getMe();
       setUser(me);

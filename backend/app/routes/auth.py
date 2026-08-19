@@ -18,6 +18,7 @@ from ..auth import (
     verify_password,
     create_access_token,
     get_current_user,
+    check_is_superadmin,
     AuthenticatedUser,
     SECRET_KEY_BYTES,
 )
@@ -112,12 +113,16 @@ async def google_auth(req: GoogleLoginRequest, db: AsyncSession = Depends(get_db
             password_hash=dummy_hash,
             is_verified=True,  # Google-authenticated users are auto-verified
         )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-
-    token = create_access_token(user.id, user.email, session_password)
-    return TokenResponse(access_token=token)
+    is_superadmin = check_is_superadmin(user)
+    token = create_access_token(user.id, user.email, session_password, is_superadmin=is_superadmin)
+    user_out = UserOut(
+        id=user.id,
+        email=user.email,
+        created_at=user.created_at,
+        has_printing_code=bool(user.printing_code_encrypted),
+        is_superadmin=is_superadmin,
+    )
+    return TokenResponse(access_token=token, user=user_out)
 
 
 @router.post("/register", response_model=MessageResponse)
@@ -244,8 +249,16 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
             detail="Please verify your email before logging in. Check your inbox for the activation link.",
         )
 
-    token = create_access_token(user.id, user.email, req.password)
-    return TokenResponse(access_token=token)
+    is_superadmin = check_is_superadmin(user)
+    token = create_access_token(user.id, user.email, req.password, is_superadmin=is_superadmin)
+    user_out = UserOut(
+        id=user.id,
+        email=user.email,
+        created_at=user.created_at,
+        has_printing_code=bool(user.printing_code_encrypted),
+        is_superadmin=is_superadmin,
+    )
+    return TokenResponse(access_token=token, user=user_out)
 
 
 @router.get("/me", response_model=UserOut)

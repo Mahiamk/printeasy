@@ -183,8 +183,10 @@ async def mark_as_printed(
             copies = max(1, min(req.copies or 1, 50))
             job.page_count = max(1, min(req.page_count * copies, 500))
 
-    # Delete blob storage
-    await delete_blob_file(job.blob_url)
+    # Delete blob storage only if purge_file is True (allows user to keep file in queue for layout check/reprint)
+    should_purge = True if req is None or req.purge_file is None else bool(req.purge_file)
+    if should_purge:
+        await delete_blob_file(job.blob_url)
 
     job.status = PrintJobStatus.printed
     job.printed_at = datetime.now(timezone.utc)

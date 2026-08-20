@@ -109,20 +109,30 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
       URL.revokeObjectURL(preloadedBlobUrlRef.current);
       preloadedBlobUrlRef.current = null;
     }
+    if (job.status === 'printed') return; // File already purged from storage
+
     try {
       const response = await fetch(job.blob_url);
       if (response.ok) {
         const blob = await response.blob();
-        preloadedBlobUrlRef.current = URL.createObjectURL(blob);
+        if (blob.size > 0) {
+          preloadedBlobUrlRef.current = URL.createObjectURL(blob);
+        }
       }
     } catch {
-      // Ignore background preload error; direct fallback handles it
+      // Direct fallback handles it on click
     }
   }, []);
 
   const triggerIframePrint = useCallback(async (job: PrintJob) => {
     setPrintStatus('loading');
     setPrintError('');
+
+    if (job.status === 'printed') {
+      setPrintStatus('error');
+      setPrintError('This document was already printed and its file stream was purged for privacy.');
+      return;
+    }
 
     // Clean up previous print iframe
     const existingFrame = document.getElementById('print-target-iframe');
@@ -132,8 +142,16 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
       let localUrl = preloadedBlobUrlRef.current;
       if (!localUrl) {
         const response = await fetch(job.blob_url);
-        if (!response.ok) throw new Error('Could not load file stream from storage');
+        if (response.status === 404) {
+          throw new Error('Document file not found in storage (it may have expired or been purged after printing).');
+        }
+        if (!response.ok) {
+          throw new Error(`Storage error (${response.status}): Could not load file stream.`);
+        }
         const blob = await response.blob();
+        if (blob.size === 0) {
+          throw new Error('Retrieved document is empty.');
+        }
         localUrl = URL.createObjectURL(blob);
         preloadedBlobUrlRef.current = localUrl;
       }
@@ -160,12 +178,12 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
 
         setTimeout(() => {
           iframe.remove();
-        }, 3000);
+        }, 4000);
       };
 
       iframe.onerror = () => {
         setPrintStatus('error');
-        setPrintError('Browser prevented direct print. Click "View in Tab" to print.');
+        setPrintError('Browser blocked iframe rendering. Try opening the document in a new tab.');
         iframe.remove();
       };
 
@@ -232,7 +250,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
       ? totalPagesToPrint > currentColorRemaining
       : totalPagesToPrint > currentBwRemaining;
 
-  const handleMarkPrinted = async () => {
+  const handleMarkPrinted = async (purgeFile: boolean = true) => {
     if (!printingJob) return;
     setIsMarkingPrinted(true);
     try {
@@ -240,6 +258,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
         color_mode: selectedColorMode,
         page_count: selectedPages,
         copies: selectedCopies,
+        purge_file: purgeFile,
       });
       await refreshStats();
       onJobPrinted?.(printingJob.id);
@@ -414,6 +433,20 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                     >
                       {job.color_mode === 'color' ? '🎨 Color' : '📄 B&W'} • {job.page_count || 1} pg
                     </span>
+                    {job.status === 'printed' && (
+                      <span
+                        style={{
+                          background: 'rgba(127, 166, 138, 0.15)',
+                          color: 'var(--accent-sage)',
+                          padding: '1px 5px',
+                          borderRadius: 'var(--radius-xs)',
+                          fontWeight: 700,
+                          fontSize: '10px',
+                        }}
+                      >
+                        ✓ Printed
+                      </span>
+                    )}
                     <span>{formatSize(job.file_size)}</span>
                     <span>•</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -432,19 +465,20 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                     display: 'flex',
                     alignItems: 'center',
                     gap: '5px',
-                    background: 'var(--accent-sage)',
-                    color: 'var(--text-inverse)',
+                    background: job.status === 'printed' ? 'var(--bg-elevated)' : 'var(--accent-sage)',
+                    border: job.status === 'printed' ? '1px solid var(--border-subtle)' : 'none',
+                    color: job.status === 'printed' ? 'var(--text-primary)' : 'var(--text-inverse)',
                     padding: '7px 14px',
                     borderRadius: 'var(--radius-sm)',
                     fontSize: '12px',
                     fontWeight: 700,
-                    boxShadow: '0 2px 8px rgba(127, 166, 138, 0.25)',
+                    boxShadow: job.status === 'printed' ? 'none' : '0 2px 8px rgba(127, 166, 138, 0.25)',
                     transition: 'all var(--transition-fast)',
                     cursor: 'pointer',
                   }}
                 >
-                  <Printer size={15} weight="bold" />
-                  <span>Print</span>
+                  <Printer size={15} weight={job.status === 'printed' ? 'regular' : 'bold'} />
+                  <span>{job.status === 'printed' ? 'Reprint' : 'Print'}</span>
                 </button>
 
                 <button
@@ -1033,10 +1067,10 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                   </button>
                 </div>
 
-                {/* Confirm & Save Exact Quota Deduction */}
+                {/* 1. Complete & Purge File */}
                 <button
                   type="button"
-                  onClick={handleMarkPrinted}
+                  onClick={() => handleMarkPrinted(true)}
                   disabled={isMarkingPrinted || isQuotaExceeded}
                   style={{
                     width: '100%',
@@ -1044,15 +1078,16 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '6px',
-                    background: 'rgba(127, 166, 138, 0.1)',
-                    border: '1px solid rgba(127, 166, 138, 0.3)',
+                    background: 'rgba(127, 166, 138, 0.15)',
+                    border: '1px solid rgba(127, 166, 138, 0.35)',
                     color: 'var(--accent-sage)',
-                    padding: '10px',
+                    padding: '11px',
                     borderRadius: 'var(--radius-sm)',
                     fontSize: '13px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: isMarkingPrinted || isQuotaExceeded ? 'not-allowed' : 'pointer',
                     opacity: isMarkingPrinted || isQuotaExceeded ? 0.5 : 1,
+                    transition: 'all var(--transition-fast)',
                   }}
                 >
                   {isMarkingPrinted ? (
@@ -1061,9 +1096,34 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                     <CheckCircle size={16} weight="duotone" />
                   )}
                   <span>
-                    Done Printing — Deduct {totalPagesToPrint} {selectedColorMode === 'color' ? 'Color' : 'B&W'}{' '}
-                    pg & Purge
+                    Print Completed — Deduct {totalPagesToPrint} {selectedColorMode === 'color' ? 'Color' : 'B&W'} pg & Purge
                   </span>
+                </button>
+
+                {/* 2. Keep in Queue / Reprint Later */}
+                <button
+                  type="button"
+                  onClick={() => handleMarkPrinted(false)}
+                  disabled={isMarkingPrinted || isQuotaExceeded}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                    padding: '9px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isMarkingPrinted || isQuotaExceeded ? 'not-allowed' : 'pointer',
+                    opacity: isMarkingPrinted || isQuotaExceeded ? 0.5 : 1,
+                    transition: 'all var(--transition-fast)',
+                  }}
+                >
+                  <span>Keep in Queue (Check Layout / Reprint Later)</span>
                 </button>
               </div>
             </div>

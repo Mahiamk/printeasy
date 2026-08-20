@@ -70,6 +70,7 @@ class MarkPrintedRequest(BaseModel):
     color_mode: Optional[str] = None
     page_count: Optional[int] = None
     copies: Optional[int] = 1
+    purge_file: Optional[bool] = True
 
 
 

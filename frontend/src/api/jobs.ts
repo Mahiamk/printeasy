@@ -40,7 +40,7 @@ export const jobsApi = {
 
   markPrinted: async (
     id: string,
-    settings?: { color_mode?: 'bw' | 'color'; page_count?: number; copies?: number }
+    settings?: { color_mode?: 'bw' | 'color'; page_count?: number; copies?: number; purge_file?: boolean }
   ): Promise<PrintJob> => {
     const res = await api.patch(`/api/jobs/${id}/print`, settings || {});
     return res.data;

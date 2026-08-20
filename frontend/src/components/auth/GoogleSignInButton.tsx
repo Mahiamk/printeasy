@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
@@ -11,7 +11,7 @@ declare global {
         id: {
           initialize: (config: any) => void;
           renderButton: (parent: HTMLElement, options: any) => void;
-          prompt: () => void;
+          prompt: (notification?: any) => void;
         };
       };
     };
@@ -23,18 +23,49 @@ interface GoogleSignInButtonProps {
   text?: 'signin_with' | 'signup_with' | 'continue_with';
 }
 
+// Global script loading promise to avoid duplicate tags and race conditions
+let gsiScriptPromise: Promise<void> | null = null;
+function loadGoogleGsiScript(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (window.google?.accounts?.id) return Promise.resolve();
+  if (gsiScriptPromise) return gsiScriptPromise;
+
+  gsiScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (existing) {
+      if (window.google?.accounts?.id) {
+        resolve();
+      } else {
+        existing.addEventListener('load', () => resolve());
+        existing.addEventListener('error', () => reject(new Error('Failed to load Google GSI')));
+      }
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Google GSI'));
+    document.head.appendChild(script);
+  });
+
+  return gsiScriptPromise;
+}
+
 export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
   onError,
   text = 'continue_with',
 }) => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const hiddenBtnRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
-  const [isHovered, setIsHovered] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  // 1. Fetch Google Client ID from backend or Vite env
+  // 1. Fetch Google Client ID
   useEffect(() => {
     let mounted = true;
     const fetchConfig = async () => {
@@ -49,7 +80,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
           setClientId(cfg.client_id);
         }
       } catch {
-        // Fallback silently if unavailable
+        // Fallback silently
       }
     };
 
@@ -59,11 +90,9 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
     };
   }, []);
 
-  // 2. Load Google GSI script and bind native transparent trigger
-  useEffect(() => {
-    if (!clientId) return;
-
-    const handleCredentialResponse = async (response: any) => {
+  // 2. Handle Google Credential Response
+  const handleCredentialResponse = useCallback(
+    async (response: any) => {
       if (!response.credential) {
         if (onError) onError('Google Sign-In failed: No credential received.');
         return;
@@ -80,40 +109,85 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       } finally {
         setLoading(false);
       }
-    };
+    },
+    [onError, login, navigate]
+  );
 
-    const initGsi = () => {
-      if (!window.google?.accounts?.id || !hiddenBtnRef.current) return;
+  // 3. Initialize and Render Official Google Button
+  useEffect(() => {
+    if (!clientId) return;
+    let mounted = true;
 
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredentialResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true,
+    loadGoogleGsiScript()
+      .then(() => {
+        if (!mounted || !containerRef.current || !window.google?.accounts?.id) return;
+
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        // Clear container to avoid duplicate iframes on re-renders
+        containerRef.current.innerHTML = '';
+
+        // Calculate responsive width matching the container
+        const measuredWidth = containerRef.current.offsetWidth || 340;
+        const targetWidth = Math.min(Math.max(measuredWidth, 240), 400);
+
+        window.google.accounts.id.renderButton(containerRef.current, {
+          type: 'standard',
+          theme: 'filled_black',
+          size: 'large',
+          shape: 'rectangular',
+          text: text,
+          logo_alignment: 'left',
+          width: targetWidth,
+        });
+
+        setReady(true);
+      })
+      .catch((err) => {
+        console.error('[Google GSI Error]', err);
       });
 
-      // Render native button inside invisible container to capture click safely
-      window.google.accounts.id.renderButton(hiddenBtnRef.current, {
-        type: 'standard',
-        theme: 'filled_black',
-        size: 'large',
-        shape: 'rectangular',
-        width: 380,
-      });
+    return () => {
+      mounted = false;
+    };
+  }, [clientId, text, handleCredentialResponse]);
+
+  // Re-render button on window resize / orientation change so width stays 100%
+  useEffect(() => {
+    if (!ready || !clientId || !containerRef.current || !window.google?.accounts?.id) return;
+
+    let resizeTimer: any;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (!containerRef.current || !window.google?.accounts?.id) return;
+        containerRef.current.innerHTML = '';
+        const measuredWidth = containerRef.current.offsetWidth || 340;
+        const targetWidth = Math.min(Math.max(measuredWidth, 240), 400);
+
+        window.google.accounts.id.renderButton(containerRef.current, {
+          type: 'standard',
+          theme: 'filled_black',
+          size: 'large',
+          shape: 'rectangular',
+          text: text,
+          logo_alignment: 'left',
+          width: targetWidth,
+        });
+      }, 200);
     };
 
-    if (window.google?.accounts?.id) {
-      initGsi();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => initGsi();
-    document.head.appendChild(script);
-  }, [clientId, onError, login, navigate]);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimer);
+    };
+  }, [ready, clientId, text]);
 
   const buttonLabel =
     text === 'signup_with'
@@ -123,43 +197,50 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       : 'Continue with Google';
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
-      {/* Sleek Custom Button matching Login button aesthetic */}
-      <button
-        type="button"
-        disabled={loading}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        style={{
-          width: '100%',
-          background: isHovered ? 'var(--bg-card-hover, #242938)' : 'var(--bg-elevated, #1e2230)',
-          border: `1px solid ${isHovered ? 'rgba(255, 255, 255, 0.2)' : 'var(--border-subtle)'}`,
-          color: 'var(--text-primary)',
-          padding: '12px 16px',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: '15px',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '10px',
-          boxShadow: 'var(--shadow-sm)',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          transition: 'all var(--transition-fast)',
-          opacity: loading ? 0.7 : 1,
-        }}
-      >
-        {loading ? (
+    <div style={{ position: 'relative', width: '100%', minHeight: '44px' }}>
+      {/* Loading Overlay when processing authentication */}
+      {loading && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 20,
+            background: 'var(--bg-card, #1c1f2e)',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            color: 'var(--text-primary)',
+            fontSize: '14px',
+            fontWeight: 600,
+          }}
+        >
           <Spinner size={20} className="animate-spin" color="var(--accent-sage)" />
-        ) : (
-          /* Clean transparent Google G logo with no white box container */
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            style={{ flexShrink: 0 }}
-          >
+          <span>Signing in with Google...</span>
+        </div>
+      )}
+
+      {/* Placeholder skeleton before Google script finishes loading */}
+      {!ready && (
+        <div
+          style={{
+            width: '100%',
+            height: '44px',
+            background: 'var(--bg-elevated, #1e2230)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-sm)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            color: 'var(--text-secondary)',
+            fontSize: '14px',
+            fontWeight: 600,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
               fill="#4285F4"
@@ -177,23 +258,19 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
               fill="#EA4335"
             />
           </svg>
-        )}
-        <span>{loading ? 'Signing in...' : buttonLabel}</span>
-      </button>
+          <span>{buttonLabel}</span>
+        </div>
+      )}
 
-      {/* Invisible overlay capturing clicks to trigger Google One-Tap / Identity popup */}
+      {/* Official Native Google Button Container - Zero Dead Zones on Mobile */}
       <div
-        ref={hiddenBtnRef}
+        ref={containerRef}
         style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: 0.001,
-          overflow: 'hidden',
-          cursor: 'pointer',
-          zIndex: 10,
-          display: 'flex',
-          alignItems: 'center',
+          width: '100%',
+          display: ready ? 'flex' : 'none',
           justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '44px',
         }}
       />
     </div>

@@ -47,6 +47,39 @@ class GoogleConfigResponse(BaseModel):
     client_id: Optional[str] = None
 
 
+# --- QR Code Login ---
+class QRInitiateRequest(BaseModel):
+    device_info: Optional[str] = None
+
+
+class QRInitiateResponse(BaseModel):
+    token: str
+    expires_at: datetime
+    expires_in_seconds: int
+    device_info: Optional[str] = None
+
+
+class QRStatusResponse(BaseModel):
+    status: str  # pending, approved, consumed, expired, rejected
+    access_token: Optional[str] = None
+    user: Optional[UserOut] = None
+    device_info: Optional[str] = None
+
+
+class QRInfoResponse(BaseModel):
+    token: str
+    status: str
+    device_info: Optional[str] = None
+    created_at: datetime
+    expires_at: datetime
+
+
+class QRAuthorizeRequest(BaseModel):
+    token: str
+    action: str = "approve"  # "approve" or "reject"
+
+
+
 
 # --- Print Jobs ---
 class PrintJobOut(BaseModel):

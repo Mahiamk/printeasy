@@ -18,6 +18,28 @@ export interface MessageResponse {
   message: string;
 }
 
+export interface QRInitiateResponse {
+  token: string;
+  expires_at: string;
+  expires_in_seconds: number;
+  device_info?: string;
+}
+
+export interface QRStatusResponse {
+  status: 'pending' | 'approved' | 'consumed' | 'expired' | 'rejected';
+  access_token?: string;
+  user?: User;
+  device_info?: string;
+}
+
+export interface QRInfoResponse {
+  token: string;
+  status: string;
+  device_info?: string;
+  created_at: string;
+  expires_at: string;
+}
+
 export const authApi = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
     const res = await api.post('/api/auth/login', { email, password });
@@ -57,4 +79,25 @@ export const authApi = {
     const res = await api.post('/api/auth/google', { id_token });
     return res.data;
   },
+
+  qrInitiate: async (device_info?: string): Promise<QRInitiateResponse> => {
+    const res = await api.post('/api/auth/qr/initiate', { device_info });
+    return res.data;
+  },
+
+  qrCheckStatus: async (token: string): Promise<QRStatusResponse> => {
+    const res = await api.get(`/api/auth/qr/status/${encodeURIComponent(token)}`);
+    return res.data;
+  },
+
+  qrGetInfo: async (token: string): Promise<QRInfoResponse> => {
+    const res = await api.get(`/api/auth/qr/info/${encodeURIComponent(token)}`);
+    return res.data;
+  },
+
+  qrAuthorize: async (token: string, action: 'approve' | 'reject' = 'approve'): Promise<{ status: string; message: string }> => {
+    const res = await api.post('/api/auth/qr/authorize', { token, action });
+    return res.data;
+  },
 };
+

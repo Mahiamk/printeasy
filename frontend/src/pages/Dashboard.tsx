@@ -8,7 +8,7 @@ import { PrintJob, jobsApi } from '../api/jobs';
 import { StatsResponse, statsApi } from '../api/stats';
 import { codeApi } from '../api/code';
 import { useData } from '../context/DataContext';
-import { Key, Gear, Copy, Check } from '@phosphor-icons/react';
+import { Key, Gear, Copy, Check, QrCode } from '@phosphor-icons/react';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -172,6 +172,58 @@ export const Dashboard: React.FC = () => {
 
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '12px', lineHeight: 1.5 }}>
               Type this code on the printer's keypad to release queued print jobs. Decrypted securely for your session.
+            </p>
+          </div>
+
+          {/* Link Lab PC / Quick Login */}
+          <div
+            className="responsive-card"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '18px 16px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    background: 'var(--accent-sage-subtle)',
+                    color: 'var(--accent-sage)',
+                    padding: '6px',
+                    borderRadius: 'var(--radius-sm)',
+                    display: 'flex',
+                  }}
+                >
+                  <QrCode size={18} weight="duotone" />
+                </div>
+                <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                  Log In on Lab PC
+                </h4>
+              </div>
+              <button
+                onClick={() => navigate('/link-device')}
+                style={{
+                  background: 'var(--accent-sage)',
+                  color: 'var(--text-inverse)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: 'var(--shadow-glow-sage)',
+                }}
+              >
+                <span>Scan QR</span>
+              </button>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+              At a library lab computer? Select <strong>Scan QR</strong> on its login screen and scan it with your phone to log in instantly.
             </p>
           </div>
 

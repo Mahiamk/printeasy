@@ -26,8 +26,12 @@ import {
   Sparkle,
   ChartPieSlice,
   Question,
+  PaperPlaneTilt,
+  Buildings,
+  WifiHigh,
 } from '@phosphor-icons/react';
 
+import { CampusPrinter, RelayStatusResponse, printersApi } from '../../api/printers';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface QueueTableProps {
@@ -50,6 +54,31 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
   const [printStatus, setPrintStatus] = useState<'idle' | 'loading' | 'printing' | 'error' | 'done'>('idle');
   const [printError, setPrintError] = useState<string>('');
   const [isMarkingPrinted, setIsMarkingPrinted] = useState<boolean>(false);
+
+  // Campus Printer Destination & Relay State
+  const [printers, setPrinters] = useState<CampusPrinter[]>([]);
+  const [selectedPrinterId, setSelectedPrinterId] = useState<string>('toshiba-library-3525ac');
+  const [isSpoolingNetwork, setIsSpoolingNetwork] = useState<boolean>(false);
+  const [networkSpoolSuccessMsg, setNetworkSpoolSuccessMsg] = useState<string>('');
+  const [userPinInput, setUserPinInput] = useState<string>('');
+  const [relayStatus, setRelayStatus] = useState<RelayStatusResponse | null>(null);
+
+  // Fetch campus printers list and relay status on mount
+  useEffect(() => {
+    printersApi.list().then((list) => {
+      if (list && list.length > 0) {
+        setPrinters(list);
+        const def = list.find((p) => p.is_default) || list[0];
+        setSelectedPrinterId(def.id);
+      }
+    }).catch(() => {});
+
+    printersApi.getRelayStatus().then(setRelayStatus).catch(() => {});
+    const interval = setInterval(() => {
+      printersApi.getRelayStatus().then(setRelayStatus).catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Preloaded blob URL for zero-delay synchronous print
   const preloadedBlobUrlRef = useRef<string | null>(null);
@@ -216,9 +245,12 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
       // Fetch user's release keypad code
       try {
         const codeData = await codeApi.get();
-        setPrintingCode(codeData.code || '');
+        const initialPin = codeData.code || '';
+        setPrintingCode(initialPin);
+        setUserPinInput(initialPin);
       } catch {
         setPrintingCode('');
+        setUserPinInput('');
       }
     },
     [preloadBlob]
@@ -235,8 +267,9 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
   };
 
   const handleCopyCode = () => {
-    if (!printingCode) return;
-    navigator.clipboard.writeText(printingCode);
+    const codeToCopy = userPinInput || printingCode;
+    if (!codeToCopy) return;
+    navigator.clipboard.writeText(codeToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -270,10 +303,38 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
     }
   };
 
+  const handleDirectNetworkSpool = async () => {
+    if (!printingJob || !selectedPrinterId) return;
+    setIsSpoolingNetwork(true);
+    setPrintError('');
+    setNetworkSpoolSuccessMsg('');
+    try {
+      const pinToSend = (userPinInput || printingCode || '').trim();
+      const res = await printersApi.spoolJob(printingJob.id, {
+        printer_id: selectedPrinterId,
+        pin_code: pinToSend,
+        color_mode: selectedColorMode,
+        page_count: selectedPages,
+        copies: selectedCopies,
+        purge_file: false, // Keep document in queue so user can reprint if desired
+      });
+      setNetworkSpoolSuccessMsg(res.message);
+      setPrintStatus('done');
+      await refreshStats();
+      onJobPrinted?.(printingJob.id);
+    } catch (err: any) {
+      setPrintError(err?.response?.data?.detail || 'Failed to send document to campus printer over network.');
+      setPrintStatus('error');
+    } finally {
+      setIsSpoolingNetwork(false);
+    }
+  };
+
   const closePrintModal = () => {
     setPrintingJob(null);
     setPrintStatus('idle');
     setPrintError('');
+    setNetworkSpoolSuccessMsg('');
     setCodeRevealed(false);
     setCodeCountdown(0);
     setCopied(false);
@@ -634,11 +695,103 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>
-                    This webpage is ready to print
+                    Print Destination & Settings
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    Do you want to send <strong style={{ color: 'var(--accent-sage)' }}>{printingJob.file_name}</strong> directly to the library printer dialog?
+                    Select your campus printer to print directly over network, or open the local browser print dialog.
                   </div>
+                </div>
+              </div>
+
+              {/* Destination Campus Printer Selector */}
+              <div
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '16px',
+                  marginBottom: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Buildings size={16} weight="duotone" color="var(--accent-sage)" />
+                    <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+                      Destination Campus Printer
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: relayStatus?.is_relay_active ? 'var(--accent-sage)' : 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        background: relayStatus?.is_relay_active ? '#4ade80' : '#94a3b8',
+                        display: 'inline-block',
+                      }}
+                    />
+                    {relayStatus?.is_relay_active ? 'Library Relay Online' : 'Cloud Dispatch Ready'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {printers.map((p) => {
+                    const isSelected = selectedPrinterId === p.id;
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => setSelectedPrinterId(p.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: 'var(--radius-md)',
+                          border: isSelected ? '1.5px solid var(--accent-sage)' : '1px solid var(--border-subtle)',
+                          background: isSelected ? 'rgba(127, 166, 138, 0.1)' : 'var(--bg-card)',
+                          cursor: 'pointer',
+                          transition: 'all var(--transition-fast)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div
+                            style={{
+                              background: isSelected ? 'var(--accent-sage)' : 'var(--bg-elevated)',
+                              color: isSelected ? 'var(--text-inverse)' : 'var(--text-muted)',
+                              padding: '6px',
+                              borderRadius: 'var(--radius-sm)',
+                              display: 'flex',
+                            }}
+                          >
+                            <Printer size={18} weight={isSelected ? 'fill' : 'regular'} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {p.name}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              {p.location} • <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--accent-sage)' }}>{p.host}:{p.port}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <div style={{ background: 'var(--accent-sage)', color: 'var(--text-inverse)', borderRadius: 'var(--radius-full)', padding: '3px', display: 'flex' }}>
+                            <Check size={12} weight="bold" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -844,106 +997,126 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                 )}
               </div>
 
-              {/* Printer Release Keypad PIN Card */}
+              {/* School Department Code Card */}
               <div
                 style={{
                   background: 'linear-gradient(145deg, rgba(212, 163, 89, 0.12) 0%, rgba(212, 163, 89, 0.04) 100%)',
                   border: '1.5px solid rgba(212, 163, 89, 0.35)',
                   borderRadius: 'var(--radius-lg)',
                   padding: '16px',
-                  textAlign: 'center',
                   marginBottom: '16px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <Key size={16} weight="duotone" color="var(--accent-amber)" />
-                  <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent-amber)' }}>
-                    Printer Release Keypad PIN
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Key size={16} weight="duotone" color="var(--accent-amber)" />
+                    <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-amber)' }}>
+                      Your School Department Code
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Auto-authenticates on printer
                   </span>
                 </div>
 
-                {printingCode ? (
-                  <>
-                    <div
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <input
+                      type={codeRevealed ? 'text' : 'password'}
+                      value={userPinInput}
+                      onChange={(e) => setUserPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
+                      placeholder="Enter your Department Code (e.g. 12345)"
                       style={{
+                        width: '100%',
+                        background: 'var(--bg-card)',
+                        border: '1.5px solid rgba(212, 163, 89, 0.4)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '10px 42px 10px 14px',
                         fontFamily: 'var(--font-family-mono)',
-                        fontSize: codeRevealed ? '34px' : '26px',
-                        fontWeight: 800,
-                        color: codeRevealed ? 'var(--accent-amber)' : 'rgba(212, 163, 89, 0.4)',
+                        fontSize: '18px',
+                        fontWeight: 700,
+                        color: 'var(--accent-amber)',
                         letterSpacing: codeRevealed ? '0.18em' : '0.25em',
-                        margin: '4px 0 8px',
-                        transition: 'all 0.25s ease',
-                        textShadow: codeRevealed ? '0 0 20px rgba(212, 163, 89, 0.35)' : 'none',
-                        userSelect: codeRevealed ? 'text' : 'none',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCodeRevealed(!codeRevealed)}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                      }}
+                      title={codeRevealed ? 'Hide Code' : 'Reveal Code'}
+                    >
+                      {codeRevealed ? <EyeSlash size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+
+                  {userPinInput && (
+                    <button
+                      type="button"
+                      onClick={handleCopyCode}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        background: 'var(--bg-elevated)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-primary)',
+                        padding: '11px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        flexShrink: 0,
                       }}
                     >
-                      {codeRevealed ? printingCode : '••••••'}
-                    </div>
+                      {copied ? <Check size={14} color="var(--accent-sage)" /> : <Copy size={14} />}
+                      <span>{copied ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  )}
+                </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={codeRevealed ? handleHideCode : handleRevealCode}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border-subtle)',
-                          color: 'var(--text-secondary)',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          padding: '5px 12px',
-                          borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {codeRevealed ? <EyeSlash size={14} /> : <Eye size={14} />}
-                        <span>{codeRevealed ? 'Hide PIN' : 'Reveal PIN'}</span>
-                      </button>
-
-                      {codeRevealed && (
-                        <button
-                          type="button"
-                          onClick={handleCopyCode}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: 'var(--bg-elevated)',
-                            border: '1px solid var(--border-subtle)',
-                            color: 'var(--text-secondary)',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            padding: '5px 12px',
-                            borderRadius: 'var(--radius-sm)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {copied ? <Check size={14} color="var(--accent-sage)" /> : <Copy size={14} />}
-                          <span>{copied ? 'Copied!' : 'Copy PIN'}</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {codeRevealed && (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '10px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                        <Clock size={12} weight="duotone" />
-                        <span>Auto-hides in {codeCountdown}s for shared PC privacy</span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ padding: '4px 0' }}>
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-                      No release code configured.{' '}
-                      <a href="/code" style={{ color: 'var(--accent-amber)', fontWeight: 600 }}>
-                        Set PIN code →
-                      </a>
-                    </p>
-                  </div>
-                )}
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4, textAlign: 'left' }}>
+                  ⚡ <strong>Direct Output:</strong> PrintEasy embeds your Department Code into the print stream. The Toshiba printer authenticates it automatically so your physical pages print immediately without any popup on the computer!
+                </div>
               </div>
+
+              {/* Network Spool Success Banner */}
+              {networkSpoolSuccessMsg && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    padding: '12px 14px',
+                    background: 'rgba(127, 166, 138, 0.15)',
+                    border: '1.5px solid var(--accent-sage)',
+                    borderRadius: 'var(--radius-md)',
+                    marginBottom: '14px',
+                  }}
+                >
+                  <CheckCircle size={20} weight="fill" color="var(--accent-sage)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent-sage)', marginBottom: '2px' }}>
+                      Document Sent to Campus Printer!
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                      {networkSpoolSuccessMsg}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Status Banner */}
               {printStatus === 'loading' && (
@@ -961,7 +1134,9 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                   }}
                 >
                   <Spinner size={16} className="animate-spin" color="var(--accent-sage)" />
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Preparing print stream...</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    {isSpoolingNetwork ? 'Spooling document to campus printer over socket...' : 'Preparing print stream...'}
+                  </span>
                 </div>
               )}
 
@@ -1005,6 +1180,43 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* 1. Direct Network Spool Button (No Lab PC Needed) */}
+                <button
+                  type="button"
+                  onClick={handleDirectNetworkSpool}
+                  disabled={isSpoolingNetwork || printStatus === 'loading' || isQuotaExceeded}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    background: 'linear-gradient(135deg, #7fa68a 0%, #5d876a 100%)',
+                    color: 'var(--text-inverse)',
+                    padding: '13px 18px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    boxShadow: '0 4px 16px rgba(127, 166, 138, 0.35)',
+                    border: 'none',
+                    cursor: isSpoolingNetwork || printStatus === 'loading' || isQuotaExceeded ? 'not-allowed' : 'pointer',
+                    opacity: isSpoolingNetwork || printStatus === 'loading' || isQuotaExceeded ? 0.6 : 1,
+                    transition: 'all var(--transition-fast)',
+                  }}
+                >
+                  {isSpoolingNetwork ? (
+                    <Spinner size={18} className="animate-spin" />
+                  ) : (
+                    <PaperPlaneTilt size={18} weight="bold" />
+                  )}
+                  <span>
+                    {isSpoolingNetwork
+                      ? 'Spooling to Printer...'
+                      : `Send to ${printers.find((p) => p.id === selectedPrinterId)?.name || 'Toshiba 3525AC'} (Direct Network)`}
+                  </span>
+                </button>
+
+                {/* 2. Secondary Row: Browser Print Dialog & View in Tab */}
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {!isDocx(printingJob) && (
                     <button
@@ -1016,30 +1228,21 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '8px',
-                        background: 'linear-gradient(135deg, #7fa68a 0%, #689274 100%)',
-                        color: 'var(--text-inverse)',
-                        padding: '12px 18px',
+                        gap: '6px',
+                        background: 'var(--bg-elevated)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-primary)',
+                        padding: '10px 14px',
                         borderRadius: 'var(--radius-sm)',
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        boxShadow: '0 4px 14px rgba(127, 166, 138, 0.25)',
-                        border: 'none',
+                        fontSize: '12px',
+                        fontWeight: 600,
                         cursor: printStatus === 'loading' || isQuotaExceeded ? 'not-allowed' : 'pointer',
                         opacity: printStatus === 'loading' || isQuotaExceeded ? 0.6 : 1,
                         transition: 'all var(--transition-fast)',
                       }}
                     >
-                      {printStatus === 'loading' ? (
-                        <Spinner size={16} className="animate-spin" />
-                      ) : (
-                        <Printer size={18} weight="bold" />
-                      )}
-                      <span>
-                        {printStatus === 'printing'
-                          ? 'Re-trigger Print Dialog'
-                          : 'Yes, Open Print Dialog'}
-                      </span>
+                      <Printer size={16} weight="duotone" />
+                      <span>Open Browser Print Dialog</span>
                     </button>
                   )}
 
@@ -1054,10 +1257,10 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
                       gap: '6px',
                       background: 'var(--bg-elevated)',
                       border: '1px solid var(--border-subtle)',
-                      color: 'var(--text-primary)',
-                      padding: '11px 16px',
+                      color: 'var(--text-secondary)',
+                      padding: '10px 14px',
                       borderRadius: 'var(--radius-sm)',
-                      fontSize: '13px',
+                      fontSize: '12px',
                       fontWeight: 600,
                       cursor: 'pointer',
                     }}

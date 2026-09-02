@@ -11,6 +11,7 @@ import { PrintingCodePage } from './pages/PrintingCodePage';
 import { Settings } from './pages/Settings';
 import { SuperadminDashboard } from './pages/SuperadminDashboard';
 import { VerifyEmail } from './pages/VerifyEmail';
+import { LinkDevice } from './pages/LinkDevice';
 import { Spinner } from '@phosphor-icons/react';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -140,6 +141,7 @@ export const App: React.FC = () => {
                 </ProtectedRoute>
               }
             />
+            <Route path="/link-device" element={<LinkDevice />} />
             <Route
               path="/admin"
               element={

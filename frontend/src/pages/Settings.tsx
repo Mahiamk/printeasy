@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -11,9 +12,11 @@ import {
   Trash,
   CheckCircle,
   Gear,
+  QrCode,
 } from '@phosphor-icons/react';
 
 export const Settings: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { stats } = useData();
 
@@ -86,6 +89,50 @@ export const Settings: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Linked Devices & QR Login Card */}
+        <div
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-card)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '24px',
+            marginBottom: '24px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <QrCode size={22} weight="duotone" color="var(--accent-sage)" />
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Linked Devices & QR Login
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/link-device')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'var(--accent-sage)',
+                color: 'var(--text-inverse)',
+                border: 'none',
+                padding: '8px 14px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-glow-sage)',
+              }}
+            >
+              <QrCode size={16} />
+              <span>Link New Device</span>
+            </button>
+          </div>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+            Instantly log in to library workstations, secondary computers, or tablet screens by scanning the QR code displayed on their login screen.
+          </p>
         </div>
 
         {/* Quota Policy Card */}

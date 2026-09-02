@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timezone, timedelta
+import secrets
 
 from ..database import get_db
-from ..models import User
+from ..models import User, QRLoginSession
 from ..schemas import (
     RegisterRequest,
     LoginRequest,
@@ -12,6 +14,11 @@ from ..schemas import (
     GoogleLoginRequest,
     GoogleConfigResponse,
     MessageResponse,
+    QRInitiateRequest,
+    QRInitiateResponse,
+    QRStatusResponse,
+    QRInfoResponse,
+    QRAuthorizeRequest,
 )
 from ..auth import (
     hash_password,
@@ -279,3 +286,218 @@ async def get_me(current_user: AuthenticatedUser = Depends(get_current_user)):
         has_printing_code=bool(current_user.user.printing_code_encrypted),
         is_superadmin=current_user.is_superadmin,
     )
+
+
+# -------------------------------------------------------------
+# QR Code / Link Device Authentication
+# -------------------------------------------------------------
+
+def _format_device_summary(user_agent: str) -> str:
+    """Extract a user-friendly device name from User-Agent string."""
+    if not user_agent:
+        return "Unknown Device"
+    ua = user_agent.lower()
+    os_name = "Unknown OS"
+    if "mac" in ua:
+        os_name = "Mac"
+    elif "win" in ua:
+        os_name = "Windows"
+    elif "iphone" in ua:
+        os_name = "iPhone"
+    elif "ipad" in ua:
+        os_name = "iPad"
+    elif "android" in ua:
+        os_name = "Android"
+    elif "linux" in ua:
+        os_name = "Linux"
+
+    browser = "Browser"
+    if "edg" in ua:
+        browser = "Edge"
+    elif "chrome" in ua:
+        browser = "Chrome"
+    elif "safari" in ua and "chrome" not in ua:
+        browser = "Safari"
+    elif "firefox" in ua:
+        browser = "Firefox"
+
+    return f"{browser} on {os_name}"
+
+
+@router.post("/qr/initiate", response_model=QRInitiateResponse)
+async def initiate_qr_login(
+    request: Request,
+    req: QRInitiateRequest = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Called by an unauthenticated device to generate a QR session token.
+    Token is valid for 3 minutes.
+    """
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=3)
+
+    user_agent = request.headers.get("user-agent", "")
+    client_ip = request.client.host if request.client else None
+    device_info = (req and req.device_info) or _format_device_summary(user_agent)
+
+    qr_session = QRLoginSession(
+        token=token,
+        status="pending",
+        device_info=device_info,
+        ip_address=client_ip,
+        created_at=now,
+        expires_at=expires_at,
+    )
+    db.add(qr_session)
+    await db.commit()
+
+    return QRInitiateResponse(
+        token=token,
+        expires_at=expires_at,
+        expires_in_seconds=180,
+        device_info=device_info,
+    )
+
+
+@router.get("/qr/status/{token}", response_model=QRStatusResponse)
+async def check_qr_status(token: str, db: AsyncSession = Depends(get_db)):
+    """
+    Polled by the unauthenticated device.
+    When status becomes 'approved', returns single-use access token and user info,
+    then immediately marks the session 'consumed' for replay protection.
+    """
+    stmt = select(QRLoginSession).where(QRLoginSession.token == token)
+    res = await db.execute(stmt)
+    qr_session = res.scalar_one_or_none()
+
+    if not qr_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="QR session not found or has expired.",
+        )
+
+    now = datetime.now(timezone.utc)
+    if qr_session.expires_at < now and qr_session.status == "pending":
+        qr_session.status = "expired"
+        await db.commit()
+        return QRStatusResponse(status="expired", device_info=qr_session.device_info)
+
+    if qr_session.status == "approved" and qr_session.access_token and qr_session.user_id:
+        # Fetch user
+        stmt_u = select(User).where(User.id == qr_session.user_id)
+        res_u = await db.execute(stmt_u)
+        user = res_u.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User associated with QR session not found.",
+            )
+
+        is_superadmin = check_is_superadmin(user)
+        user_out = UserOut(
+            id=user.id,
+            email=user.email,
+            created_at=user.created_at,
+            has_printing_code=bool(user.printing_code_encrypted),
+            is_superadmin=is_superadmin,
+        )
+        token_to_return = qr_session.access_token
+
+        # Single-use consumption
+        qr_session.status = "consumed"
+        qr_session.access_token = None
+        await db.commit()
+
+        return QRStatusResponse(
+            status="approved",
+            access_token=token_to_return,
+            user=user_out,
+            device_info=qr_session.device_info,
+        )
+
+    return QRStatusResponse(
+        status=qr_session.status,
+        device_info=qr_session.device_info,
+    )
+
+
+@router.get("/qr/info/{token}", response_model=QRInfoResponse)
+async def get_qr_info(token: str, db: AsyncSession = Depends(get_db)):
+    """
+    Called by the scanning device (Device B) to display what device is requesting login.
+    """
+    stmt = select(QRLoginSession).where(QRLoginSession.token == token)
+    res = await db.execute(stmt)
+    qr_session = res.scalar_one_or_none()
+
+    if not qr_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="QR session not found or invalid.",
+        )
+
+    now = datetime.now(timezone.utc)
+    current_status = qr_session.status
+    if qr_session.expires_at < now and current_status == "pending":
+        current_status = "expired"
+        qr_session.status = "expired"
+        await db.commit()
+
+    return QRInfoResponse(
+        token=qr_session.token,
+        status=current_status,
+        device_info=qr_session.device_info,
+        created_at=qr_session.created_at,
+        expires_at=qr_session.expires_at,
+    )
+
+
+@router.post("/qr/authorize")
+async def authorize_qr_login(
+    req: QRAuthorizeRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Called by the logged-in device to approve or reject the QR login request.
+    """
+    stmt = select(QRLoginSession).where(QRLoginSession.token == req.token)
+    res = await db.execute(stmt)
+    qr_session = res.scalar_one_or_none()
+
+    if not qr_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="QR login session not found.",
+        )
+
+    now = datetime.now(timezone.utc)
+    if qr_session.expires_at < now or qr_session.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This login request is {qr_session.status} or has expired.",
+        )
+
+    if req.action == "reject":
+        qr_session.status = "rejected"
+        await db.commit()
+        return {"status": "rejected", "message": "Login request rejected."}
+
+    # Generate new access token for current user
+    new_token = create_access_token(
+        current_user.id,
+        current_user.email,
+        current_user.session_password,
+        is_superadmin=current_user.is_superadmin,
+    )
+
+    qr_session.status = "approved"
+    qr_session.user_id = current_user.id
+    qr_session.access_token = new_token
+    await db.commit()
+
+    return {"status": "approved", "message": "Device successfully authorized!"}
+

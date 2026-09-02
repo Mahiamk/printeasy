@@ -96,3 +96,30 @@ async def delete_blob_file(blob_url: str) -> bool:
                 return False
 
     return True
+
+
+async def get_blob_file_bytes(blob_url: str) -> bytes:
+    """
+    Retrieves raw document bytes from Vercel Blob or local storage.
+    """
+    if not blob_url:
+        raise ValueError("Blob URL is empty")
+
+    if "blob.vercel-storage.com" in blob_url or blob_url.startswith("http://") or blob_url.startswith("https://"):
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            res = await client.get(blob_url)
+            if res.status_code != 200:
+                raise HTTPException(status_code=res.status_code, detail="Could not download file stream from storage")
+            return res.content
+
+    # Check local fallback
+    if "/api/files/download/" in blob_url:
+        filename = blob_url.split("/api/files/download/")[-1]
+        local_path = LOCAL_UPLOADS_DIR / filename
+        if not local_path.exists():
+            raise HTTPException(status_code=404, detail="Local file stream not found on disk")
+        with open(local_path, "rb") as f:
+            return f.read()
+
+    raise HTTPException(status_code=404, detail="Invalid blob URL or document not found")
+

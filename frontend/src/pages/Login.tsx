@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Printer, Lock, EnvelopeSimple, Spinner, WarningCircle } from '@phosphor-icons/react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Printer, Lock, EnvelopeSimple, Spinner, WarningCircle, QrCode } from '@phosphor-icons/react';
 import { authApi } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
+import { QRCodeLogin } from '../components/auth/QRCodeLogin';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
+  const redirectPath = searchParams.get('redirect') || '/dashboard';
+
+  const [loginMethod, setLoginMethod] = useState<'password' | 'qr'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +27,7 @@ export const Login: React.FC = () => {
     try {
       const res = await authApi.login(email, password);
       await login(res.access_token, res.user);
-      navigate('/dashboard');
+      navigate(redirectPath);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Invalid email or password.');
     } finally {
@@ -73,7 +78,66 @@ export const Login: React.FC = () => {
           </p>
         </div>
 
-        {error && (
+        {/* Login Method Switcher */}
+        <div
+          style={{
+            display: 'flex',
+            background: 'var(--bg-card-subtle, rgba(255, 255, 255, 0.05))',
+            padding: '4px',
+            borderRadius: 'var(--radius-md)',
+            marginBottom: '22px',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setLoginMethod('password')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: loginMethod === 'password' ? 'var(--accent-sage)' : 'transparent',
+              color: loginMethod === 'password' ? '#ffffff' : 'var(--text-muted)',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Lock size={15} weight={loginMethod === 'password' ? 'fill' : 'regular'} />
+            <span>Password</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLoginMethod('qr')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: loginMethod === 'qr' ? 'var(--accent-sage)' : 'transparent',
+              color: loginMethod === 'qr' ? '#ffffff' : 'var(--text-muted)',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <QrCode size={16} weight={loginMethod === 'qr' ? 'fill' : 'regular'} />
+            <span>QR Code</span>
+          </button>
+        </div>
+
+        {error && loginMethod === 'password' && (
           <div
             style={{
               display: 'flex',
@@ -93,133 +157,139 @@ export const Login: React.FC = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '18px' }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-              }}
-            >
-              School Email
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="student@school.edu"
+        {loginMethod === 'qr' ? (
+          <QRCodeLogin />
+        ) : (
+          <>
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: '18px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--text-secondary)',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  School Email
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="student@school.edu"
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '12px 14px 12px 38px',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <EnvelopeSimple
+                    size={18}
+                    weight="duotone"
+                    color="var(--text-muted)"
+                    style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--text-secondary)',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  Password
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '12px 14px 12px 38px',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <Lock
+                    size={18}
+                    weight="duotone"
+                    color="var(--text-muted)"
+                    style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
                 style={{
                   width: '100%',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--accent-sage)',
+                  color: 'var(--text-inverse)',
+                  padding: '12px',
                   borderRadius: 'var(--radius-sm)',
-                  padding: '12px 14px 12px 38px',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: 'var(--shadow-glow-sage)',
+                  opacity: loading ? 0.7 : 1,
                 }}
-              />
-              <EnvelopeSimple
-                size={18}
-                weight="duotone"
-                color="var(--text-muted)"
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
-              />
-            </div>
-          </div>
+              >
+                {loading ? <Spinner size={20} className="animate-spin" /> : 'Log In'}
+              </button>
+            </form>
 
-          <div style={{ marginBottom: '24px' }}>
-            <label
+            {/* Divider */}
+            <div
               style={{
-                display: 'block',
+                display: 'flex',
+                alignItems: 'center',
+                margin: '20px 0',
+                color: 'var(--text-muted)',
                 fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: '6px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
               }}
             >
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                style={{
-                  width: '100%',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '12px 14px 12px 38px',
-                  color: 'var(--text-primary)',
-                  fontSize: '14px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <Lock
-                size={18}
-                weight="duotone"
-                color="var(--text-muted)"
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
-              />
+              <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
+              <span style={{ padding: '0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                or continue with
+              </span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              background: 'var(--accent-sage)',
-              color: 'var(--text-inverse)',
-              padding: '12px',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '15px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              boxShadow: 'var(--shadow-glow-sage)',
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? <Spinner size={20} className="animate-spin" /> : 'Log In'}
-          </button>
-        </form>
-
-        {/* Divider */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            margin: '20px 0',
-            color: 'var(--text-muted)',
-            fontSize: '12px',
-          }}
-        >
-          <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
-          <span style={{ padding: '0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            or continue with
-          </span>
-          <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
-        </div>
-
-        {/* Google Sign-In */}
-        <GoogleSignInButton onError={(msg) => setError(msg)} text="signin_with" />
+            {/* Google Sign-In */}
+            <GoogleSignInButton onError={(msg) => setError(msg)} text="signin_with" />
+          </>
+        )}
 
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '13px', color: 'var(--text-muted)' }}>
           Don't have an account?{' '}

@@ -113,6 +113,15 @@ async def google_auth(req: GoogleLoginRequest, db: AsyncSession = Depends(get_db
             password_hash=dummy_hash,
             is_verified=True,  # Google-authenticated users are auto-verified
         )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    elif not user.is_verified:
+        # Auto-verify existing user if they authenticate with verified Google account
+        user.is_verified = True
+        user.verification_token = None
+        await db.commit()
+        await db.refresh(user)
     is_superadmin = check_is_superadmin(user)
     token = create_access_token(user.id, user.email, session_password, is_superadmin=is_superadmin)
     user_out = UserOut(

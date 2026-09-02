@@ -14,6 +14,7 @@ backend_dir = Path(__file__).resolve().parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
+
 from app.database import AsyncSessionLocal
 from app.models import PrintJob, PrintJobStatus
 from app.blob import delete_blob_file, LOCAL_UPLOADS_DIR
@@ -22,6 +23,8 @@ from app.routes.jobs import router as jobs_router
 from app.routes.code import router as code_router
 from app.routes.stats import router as stats_router
 from app.routes.superadmin import router as superadmin_router
+from app.routes.printers import router as printers_router
+from app.routes.relay import router as relay_router
 
 
 async def cleanup_expired_jobs():
@@ -39,6 +42,18 @@ async def cleanup_expired_jobs():
             for job in expired_jobs:
                 await delete_blob_file(job.blob_url)
                 await db.delete(job)
+            # Clean up expired or consumed QR login sessions
+            from app.models import QRLoginSession
+            stmt_qr = select(QRLoginSession).where(
+                or_(
+                    QRLoginSession.expires_at < now,
+                    QRLoginSession.status.in_(["consumed", "expired", "rejected"]),
+                )
+            )
+            res_qr = await db.execute(stmt_qr)
+            for qr_sess in res_qr.scalars().all():
+                await db.delete(qr_sess)
+
             await db.commit()
     except Exception as e:
         print(f"[Cleanup Scheduler Error] {e}")
@@ -46,6 +61,15 @@ async def cleanup_expired_jobs():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Ensure all tables exist in database
+    try:
+        from app.database import engine, Base
+        import app.models  # noqa
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        print(f"[DB Init Note] {e}")
+
     # Only start background scheduler if running as a standalone persistent server (not on Vercel Serverless)
     scheduler = None
     is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
@@ -97,11 +121,13 @@ app.include_router(jobs_router)
 app.include_router(code_router)
 app.include_router(stats_router)
 app.include_router(superadmin_router)
+app.include_router(printers_router)
+app.include_router(relay_router)
 
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "I m fine", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/api/files/download/{filename}")

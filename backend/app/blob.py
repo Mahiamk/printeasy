@@ -116,10 +116,30 @@ async def get_blob_file_bytes(blob_url: str) -> bytes:
     if "/api/files/download/" in blob_url:
         filename = blob_url.split("/api/files/download/")[-1]
         local_path = LOCAL_UPLOADS_DIR / filename
-        if not local_path.exists():
-            raise HTTPException(status_code=404, detail="Local file stream not found on disk")
-        with open(local_path, "rb") as f:
-            return f.read()
+        if local_path.exists():
+            with open(local_path, "rb") as f:
+                return f.read()
+
+        # Database fallback if file is not on local disk (serverless Lambda or cross-instance)
+        try:
+            from .database import AsyncSessionLocal
+            from .models import PrintJob
+            from sqlalchemy import select, or_
+            async with AsyncSessionLocal() as db:
+                stmt = select(PrintJob).where(
+                    or_(
+                        PrintJob.blob_url.like(f"%{filename}%"),
+                        PrintJob.file_name == filename,
+                    )
+                ).order_by(PrintJob.created_at.desc())
+                res = await db.execute(stmt)
+                job = res.scalars().first()
+                if job and job.file_data:
+                    return job.file_data
+        except Exception as e:
+            print(f"[Blob] DB fallback error: {e}")
+
+        raise HTTPException(status_code=404, detail="Local file stream not found on disk or database")
 
     raise HTTPException(status_code=404, detail="Invalid blob URL or document not found")
 

@@ -132,6 +132,21 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
     return job.file_type.includes('word') || job.file_name.endsWith('.docx') || job.file_name.endsWith('.doc');
   };
 
+  const resolveFileUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    return baseUrl ? `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}` : url;
+  };
+
+  const fetchFileBlob = async (url: string) => {
+    const targetUrl = resolveFileUrl(url);
+    const token = localStorage.getItem('printeasy_token');
+    return await fetch(targetUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  };
+
   // Pre-load document blob stream when modal opens
   const preloadBlob = useCallback(async (job: PrintJob) => {
     if (preloadedBlobUrlRef.current) {
@@ -141,7 +156,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
     if (job.status === 'printed') return; // File already purged from storage
 
     try {
-      const response = await fetch(job.blob_url);
+      const response = await fetchFileBlob(job.blob_url);
       if (response.ok) {
         const blob = await response.blob();
         if (blob.size > 0) {
@@ -170,7 +185,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
     try {
       let localUrl = preloadedBlobUrlRef.current;
       if (!localUrl) {
-        const response = await fetch(job.blob_url);
+        const response = await fetchFileBlob(job.blob_url);
         if (response.status === 404) {
           throw new Error('Document file not found in storage (it may have expired or been purged after printing).');
         }
@@ -1248,7 +1263,7 @@ export const QueueTable: React.FC<QueueTableProps> = ({ jobs, onJobDeleted, onJo
 
                   <button
                     type="button"
-                    onClick={() => window.open(printingJob.blob_url, '_blank')}
+                    onClick={() => window.open(resolveFileUrl(printingJob.blob_url), '_blank')}
                     style={{
                       flex: isDocx(printingJob) ? 1 : undefined,
                       display: 'flex',

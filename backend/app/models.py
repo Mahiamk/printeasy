@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Integer, DateTime, Boolean, Enum as PgEnum
+from sqlalchemy import String, Integer, DateTime, Boolean, Enum as PgEnum, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
@@ -39,6 +39,7 @@ class PrintJob(Base):
     color_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="bw")
     page_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     blob_url: Mapped[str] = mapped_column(String, nullable=False)
+    file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     status: Mapped[PrintJobStatus] = mapped_column(
         PgEnum(PrintJobStatus, name="print_job_status", create_type=False),
         default=PrintJobStatus.queued,

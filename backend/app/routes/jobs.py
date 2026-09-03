@@ -147,6 +147,7 @@ async def upload_job(
         color_mode=mode,
         page_count=pages,
         blob_url=blob_url,
+        file_data=file_bytes,
         status=PrintJobStatus.queued,
         expires_at=now + timedelta(hours=24),
     )
@@ -187,6 +188,7 @@ async def mark_as_printed(
     should_purge = True if req is None or req.purge_file is None else bool(req.purge_file)
     if should_purge:
         await delete_blob_file(job.blob_url)
+        job.file_data = None
 
     job.status = PrintJobStatus.printed
     job.printed_at = datetime.now(timezone.utc)
@@ -211,6 +213,7 @@ async def delete_job(
         raise HTTPException(status_code=404, detail="Print job not found.")
 
     await delete_blob_file(job.blob_url)
+    job.file_data = None
     await db.delete(job)
     await db.commit()
 

@@ -3,10 +3,11 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Ensure backend directory is in sys.path
@@ -15,7 +16,7 @@ if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
 
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, get_db
 from app.models import PrintJob, PrintJobStatus
 from app.blob import delete_blob_file, LOCAL_UPLOADS_DIR
 from app.routes.auth import router as auth_router
@@ -131,11 +132,55 @@ async def health_check():
 
 
 @app.get("/api/files/download/{filename}")
-async def download_local_file(filename: str):
+async def download_local_file(filename: str, db: AsyncSession = Depends(get_db)):
+    # 1. Check local filesystem cache
     file_path = LOCAL_UPLOADS_DIR / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found or has expired.")
-    return FileResponse(
-        path=file_path,
-        filename=filename.split("-", 1)[-1] if "-" in filename else filename,
+    if file_path.exists():
+        return FileResponse(
+            path=file_path,
+            filename=filename.split("-", 1)[-1] if "-" in filename else filename,
+        )
+
+    # 2. Check Database fallback (Neon Postgres)
+    # Critical for Vercel serverless / multi-instance setups where disk is ephemeral
+    stmt = (
+        select(PrintJob)
+        .where(
+            or_(
+                PrintJob.blob_url.like(f"%{filename}%"),
+                PrintJob.file_name == filename,
+            )
+        )
+        .order_by(PrintJob.created_at.desc())
     )
+    res = await db.execute(stmt)
+    job = res.scalars().first()
+
+    if job and job.file_data:
+        # Cache locally to disk if writable
+        try:
+            with open(file_path, "wb") as f:
+                f.write(job.file_data)
+        except Exception:
+            pass
+
+        # Return file content stream
+        clean_name = job.file_name or (filename.split("-", 1)[-1] if "-" in filename else filename)
+        return Response(
+            content=job.file_data,
+            media_type=job.file_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'inline; filename="{clean_name}"',
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
+
+    # 3. If job exists with external URL (e.g. Vercel Blob)
+    if job and job.blob_url and (job.blob_url.startswith("http://") or job.blob_url.startswith("https://")):
+        return RedirectResponse(url=job.blob_url)
+
+    raise HTTPException(
+        status_code=404,
+        detail="Document file not found in storage (it may have expired or been purged after printing).",
+    )
+
